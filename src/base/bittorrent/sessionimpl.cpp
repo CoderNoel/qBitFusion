@@ -107,6 +107,7 @@
 #include "downloadpriority.h"
 #include "extensiondata.h"
 #include "filesearcher.h"
+#include "hybridhooks.h"
 #include "filterparserthread.h"
 #include "loadtorrentparams.h"
 #include "lttypecast.h"
@@ -432,6 +433,21 @@ void Session::freeInstance()
 {
     delete SessionImpl::m_instance;
     SessionImpl::m_instance = nullptr;
+}
+
+namespace
+{
+    BitTorrent::HybridHooks *g_hybridHooks = nullptr;
+}
+
+void Session::setHybridHooks(HybridHooks *hooks)
+{
+    g_hybridHooks = hooks;
+}
+
+HybridHooks *Session::hybridHooks()
+{
+    return g_hybridHooks;
 }
 
 Session *Session::instance()
@@ -1717,6 +1733,13 @@ void SessionImpl::processNextResumeData(ResumeSessionContext *context)
     resumeData.ltAddTorrentParams.storage = customStorageConstructor;
 #endif
 
+    if (g_hybridHooks && g_hybridHooks->shouldHoldOnLoad(torrentID))
+    {
+        // qBitFusion: restart is a transition too; a held torrent never gets an unheld window.
+        resumeData.ltAddTorrentParams.flags |= lt::torrent_flags::paused;
+        resumeData.ltAddTorrentParams.flags &= ~lt::torrent_flags::auto_managed;
+    }
+
     qDebug() << "Starting up torrent" << torrentID.toString() << "...";
     m_nativeSession->async_add_torrent(resumeData.ltAddTorrentParams);
     m_addTorrentAlertHandlers.append([this, resumeData = std::move(resumeData)](const lt::add_torrent_alert *alert) mutable
@@ -1978,7 +2001,9 @@ lt::settings_pack SessionImpl::loadLTSettings() const
         | lt::alert::port_mapping_notification
         | lt::alert::status_notification
         | lt::alert::storage_notification
-        | lt::alert::tracker_notification;
+        | lt::alert::tracker_notification
+        // qBitFusion: per-piece verdicts are needed only while a torrent uses the hybrid transport.
+        | ((g_hybridHooks && g_hybridHooks->needsPieceAlerts()) ? lt::alert::piece_progress_notification : lt::alert_category_t());
     settingsPack.set_int(lt::settings_pack::alert_mask, alertMask);
 
     settingsPack.set_int(lt::settings_pack::connection_speed, connectionSpeed());
@@ -3098,6 +3123,14 @@ bool SessionImpl::addTorrent_impl(const TorrentDescriptor &torrentDescr, const A
         p.flags |= lt::torrent_flags::auto_managed;
 
     p.flags |= lt::torrent_flags::duplicate_is_error;
+
+    if (g_hybridHooks && g_hybridHooks->shouldHoldOnAdd(id))
+    {
+        // qBitFusion transport hold from the instant of creation: no tracker/DHT/peer contact,
+        // including magnet metadata discovery (invariant I5).
+        p.flags |= lt::torrent_flags::paused;
+        p.flags &= ~lt::torrent_flags::auto_managed;
+    }
 
     p.added_time = std::time(nullptr);
 
@@ -6247,6 +6280,11 @@ void SessionImpl::handleAlert(lt::alert *alert)
             handleIPBanAlert(static_cast<const lt::ip_ban_alert *>(alert));
             break;
 #endif
+        case lt::piece_finished_alert::alert_type:
+        case lt::hash_failed_alert::alert_type:
+        case lt::torrent_paused_alert::alert_type:
+            handleHybridAlert(alert);
+            break;
         }
     }
     catch (const std::exception &exc)
@@ -6276,6 +6314,44 @@ TorrentImpl *SessionImpl::createTorrent(const lt::torrent_handle &nativeHandle, 
         LogMsg(tr("Torrent errored. Torrent: \"%1\". Error: \"%2\"").arg(torrent->name(), torrent->error()), Log::WARNING);
 
     return torrent;
+}
+
+void SessionImpl::handleHybridAlert(const lt::alert *alert)
+{
+    if (!g_hybridHooks)
+        return;
+
+    const auto *torrentAlert = static_cast<const lt::torrent_alert *>(alert);
+    TorrentImpl *torrent = getTorrent(torrentAlert->handle);
+    if (!torrent)
+        return;
+
+    switch (alert->type())
+    {
+    case lt::piece_finished_alert::alert_type:
+        g_hybridHooks->handlePieceFinished(torrent, LT::toUnderlyingType(static_cast<const lt::piece_finished_alert *>(alert)->piece_index));
+        break;
+    case lt::hash_failed_alert::alert_type:
+        g_hybridHooks->handlePieceHashFailed(torrent, LT::toUnderlyingType(static_cast<const lt::hash_failed_alert *>(alert)->piece_index));
+        break;
+    case lt::torrent_paused_alert::alert_type:
+        g_hybridHooks->handleTorrentPaused(torrent);
+        break;
+    default:
+        break;
+    }
+}
+
+void SessionImpl::setHybridAlertsEnabled()
+{
+    // Re-applies libtorrent settings so the alert mask picks up piece_progress_notification.
+    configureDeferred();
+}
+
+void SessionImpl::handleTorrentRecheckRequested(TorrentImpl *torrent)
+{
+    if (g_hybridHooks)
+        g_hybridHooks->handleRecheckRequested(torrent);
 }
 
 TorrentImpl *SessionImpl::getTorrent(const lt::torrent_handle &nativeHandle) const

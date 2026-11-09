@@ -61,6 +61,8 @@ add_library(qbt_gui STATIC
     fspathedit.h
     fspathedit_p.h
     guiaddtorrentmanager.h
+    hybrid/hybridoptionspage.h
+    hybrid/hybridwidgets.h
     guiapplicationcomponent.h
     hidabletabwidget.h
     interfaces/iguiapplication.h
@@ -169,6 +171,8 @@ add_library(qbt_gui STATIC
     fspathedit.cpp
     fspathedit_p.cpp
     guiaddtorrentmanager.cpp
+    hybrid/hybridoptionspage.cpp
+    hybrid/hybridwidgets.cpp
     hidabletabwidget.cpp
     ipsubnetwhitelistoptionsdialog.cpp
     lineedit.cpp

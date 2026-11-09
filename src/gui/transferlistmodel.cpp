@@ -35,6 +35,7 @@
 
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/session.h"
+#include "base/hybrid/hybridmanager.h"
 #include "base/bittorrent/torrent.h"
 #include "base/preferences.h"
 #include "base/types.h"
@@ -42,6 +43,7 @@
 #include "base/utils/fs.h"
 #include "base/utils/misc.h"
 #include "base/utils/string.h"
+#include "hybrid/hybridwidgets.h"
 #include "uithememanager.h"
 
 using namespace Qt::Literals::StringLiterals;
@@ -197,6 +199,7 @@ QVariant TransferListModel::headerData(const int section, const Qt::Orientation 
             case TR_INFOHASH_V2: return tr("Info Hash v2", "i.e: torrent info hash v2");
             case TR_REANNOUNCE: return tr("Reannounce In", "Indicates the time until next trackers reannounce");
             case TR_PRIVATE: return tr("Private", "Flags private torrents");
+            case TR_SOURCE: return tr("Source", "Download source: BitTorrent peers or debrid HTTPS");
             default: return {};
             }
         }
@@ -448,6 +451,8 @@ QString TransferListModel::displayValue(const BitTorrent::Torrent *torrent, cons
         return reannounceString(torrent->nextAnnounce());
     case TR_PRIVATE:
         return privateString(torrent->isPrivate(), torrent->hasMetadata());
+    case TR_SOURCE:
+        return hybridSourceText(torrent);
     }
 
     return {};
@@ -533,9 +538,18 @@ QVariant TransferListModel::internalValue(const BitTorrent::Torrent *torrent, co
         return torrent->nextAnnounce();
     case TR_PRIVATE:
         return (torrent->hasMetadata() ? torrent->isPrivate() : QVariant());
+    case TR_SOURCE:
+        return hybridSourceText(torrent);
     }
 
     return {};
+}
+
+QString TransferListModel::hybridSourceText(const BitTorrent::Torrent *torrent) const
+{
+    if (const auto status = Hybrid::HybridManager::instance()->statusFor(torrent->id()))
+        return HybridGui::sourceText(*status);
+    return tr("BitTorrent");
 }
 
 QVariant TransferListModel::data(const QModelIndex &index, const int role) const
@@ -562,8 +576,20 @@ QVariant TransferListModel::data(const QModelIndex &index, const int role) const
     case Qt::DecorationRole:
         if (index.column() == TR_NAME)
             return getIconByState(torrent->state());
+        if (index.column() == TR_SOURCE)
+        {
+            if (const auto status = Hybrid::HybridManager::instance()->statusFor(torrent->id()))
+                return HybridGui::iconFor(*status);
+            return HybridGui::iconFor(Hybrid::TransportPolicy::TorrentOnly);
+        }
         break;
     case Qt::ToolTipRole:
+        if (index.column() == TR_SOURCE)
+        {
+            if (const auto status = Hybrid::HybridManager::instance()->statusFor(torrent->id()))
+                return HybridGui::sourceToolTip(*status);
+            return tr("Standard BitTorrent download");
+        }
         switch (index.column())
         {
         case TR_NAME:

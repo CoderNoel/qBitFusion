@@ -19,6 +19,8 @@ add_library(qbt_base STATIC
     bittorrent/extensiondata.h
     bittorrent/filesearcher.h
     bittorrent/filterparserthread.h
+    bittorrent/hybridhooks.h
+    bittorrent/hybridtorrentsink.h
     bittorrent/infohash.h
     bittorrent/loadtorrentparams.h
     bittorrent/ltqbitarray.h
@@ -56,6 +58,24 @@ add_library(qbt_base STATIC
     exceptions.h
     freediskspacechecker.h
     global.h
+    hybrid/filebinding.h
+    hybrid/hybridcoordinator.h
+    hybrid/hybridmanager.h
+    hybrid/hybridsidecar.h
+    hybrid/hybridtypes.h
+    hybrid/ltlayout.h
+    hybrid/pieceassembler.h
+    hybrid/pieceownership.h
+    hybrid/provider.h
+    hybrid/providerrealdebrid.h
+    hybrid/providerhealth.h
+    hybrid/rangesource.h
+    hybrid/rangevalidation.h
+    hybrid/securestore.h
+    hybrid/tokenbucket.h
+    hybrid/torrentpiecesink.h
+    hybrid/transportstatemachine.h
+    hybrid/urlguard.h
     http/asyncfilesender.h
     http/connection.h
     http/constants.h
@@ -149,6 +169,7 @@ add_library(qbt_base STATIC
     bittorrent/downloadpriority.cpp
     bittorrent/filesearcher.cpp
     bittorrent/filterparserthread.cpp
+    bittorrent/hybridtorrentsink.cpp
     bittorrent/infohash.cpp
     bittorrent/ltqbitarray.cpp
     bittorrent/nativesessionextension.cpp
@@ -174,6 +195,22 @@ add_library(qbt_base STATIC
     bittorrent/trackerentrystatus.cpp
     exceptions.cpp
     freediskspacechecker.cpp
+    hybrid/filebinding.cpp
+    hybrid/hybridcoordinator.cpp
+    hybrid/hybridmanager.cpp
+    hybrid/hybridsidecar.cpp
+    hybrid/hybridtypes.cpp
+    hybrid/ltlayout.cpp
+    hybrid/pieceassembler.cpp
+    hybrid/pieceownership.cpp
+    hybrid/providerrealdebrid.cpp
+    hybrid/providerhealth.cpp
+    hybrid/rangesource.cpp
+    hybrid/rangevalidation.cpp
+    hybrid/securestore.cpp
+    hybrid/tokenbucket.cpp
+    hybrid/transportstatemachine.cpp
+    hybrid/urlguard.cpp
     http/asyncfilesender.cpp
     http/connection.cpp
     http/httperror.cpp
@@ -274,7 +311,7 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         utils/reg.h
         utils/reg.cpp
     )
-    target_link_libraries(qbt_base PRIVATE iphlpapi powrprof)
+    target_link_libraries(qbt_base PRIVATE advapi32 iphlpapi powrprof)
 endif()
 
 if (NOT GUI)

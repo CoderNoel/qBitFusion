@@ -70,6 +70,7 @@
 #include "base/bittorrent/addtorrentparams.h"
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/session.h"
+#include "base/hybrid/hybridmanager.h"
 #include "base/bittorrent/torrent.h"
 #include "base/exceptions.h"
 #include "base/global.h"
@@ -908,7 +909,10 @@ int Application::exec()
     Net::ProxyConfigurationManager::initInstance();
     Net::DownloadManager::initInstance();
 
+    // qBitFusion: hooks must exist before the session loads (and holds) any torrent.
+    Hybrid::HybridManager::initInstance();
     BitTorrent::Session::initInstance();
+    Hybrid::HybridManager::instance()->attachSession();
 
 #ifndef DISABLE_GUI
     UIThemeManager::initInstance();
@@ -1490,6 +1494,7 @@ void Application::cleanup()
 #ifdef DISABLE_GUI
     delete m_addTorrentManager;
 #endif
+    Hybrid::HybridManager::freeInstance();
     BitTorrent::Session::freeInstance();
     Net::ReverseResolution::freeInstance();
     Net::GeoIPManager::freeInstance();

@@ -13,6 +13,16 @@ set(testFiles
     testconceptsexplicitlyconvertibleto.cpp
     testconceptsstringable.cpp
     testglobal.cpp
+    testhybridcoordinator.cpp
+    testhybridfilebinding.cpp
+    testhybridpieceownership.cpp
+    testhybridproviderhealth.cpp
+    testhybridrangesource.cpp
+    testhybridrangevalidation.cpp
+    testhybridsidecar.cpp
+    testhybridstatemachine.cpp
+    testhybridtokenbucket.cpp
+    testhybridurlguard.cpp
     testorderedset.cpp
     testpath.cpp
     testutilsbytearray.cpp

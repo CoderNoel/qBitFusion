@@ -42,7 +42,9 @@
 #include <QFuture>
 #include <QList>
 #include <QMenu>
+#include <QGroupBox>
 #include <QMessageBox>
+#include <QVBoxLayout>
 #include <QPushButton>
 #include <QShortcut>
 #include <QSignalBlocker>
@@ -55,6 +57,7 @@
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/lttypecast.h"
 #include "base/bittorrent/session.h"
+#include "base/hybrid/hybridmanager.h"
 #include "base/bittorrent/torrent.h"
 #include "base/bittorrent/torrentcontenthandler.h"
 #include "base/bittorrent/torrentcontentlayout.h"
@@ -68,6 +71,7 @@
 #include "base/utils/misc.h"
 #include "base/utils/string.h"
 #include "filterpatternformatmenu.h"
+#include "hybrid/hybridwidgets.h"
 #include "lineedit.h"
 #include "torrenttagsdialog.h"
 
@@ -229,6 +233,8 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::TorrentDescriptor &to
     m_ui->contentTreeView->setColumnsVisibilityMode(TorrentContentWidget::ColumnsVisibilityMode::Locked);
     m_ui->contentTreeView->setDoubleClickAction(TorrentContentWidget::DoubleClickAction::Rename);
 
+    setupHybridSource();
+
     connect(m_ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(m_ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_ui->buttonSave, &QPushButton::clicked, this, &AddNewTorrentDialog::saveTorrentFile);
@@ -316,6 +322,8 @@ void AddNewTorrentDialog::setCurrentContext(const std::shared_ptr<Context> conte
         return;
 
     m_currentContext = context;
+    if (m_sourcePicker && m_currentContext)
+        m_sourcePicker->setMagnetWithoutMetadata(!m_currentContext->torrentDescr.info().has_value());
 
     const QSignalBlocker comboTMMSignalBlocker {m_ui->comboTMM};
     const QSignalBlocker startTorrentCheckBoxSignalBlocker {m_ui->startTorrentCheckBox};
@@ -684,6 +692,43 @@ void AddNewTorrentDialog::populateSavePaths()
     m_ui->groupBoxDownloadPath->blockSignals(false);
 }
 
+void AddNewTorrentDialog::setupHybridSource()
+{
+    auto *manager = Hybrid::HybridManager::instance();
+    if (!manager || !manager->isEnabled())
+        return;
+
+    auto *group = new QGroupBox(tr("Download source"), this);
+    auto *layout = new QVBoxLayout(group);
+    m_sourcePicker = new HybridGui::SourcePicker(group);
+    m_sourcePicker->setSelection(manager->defaultPolicy(), manager->defaultP2PConsent());
+    layout->addWidget(m_sourcePicker);
+    m_ui->mainlayout_addui->insertWidget(0, group);
+    if (m_currentContext)
+        m_sourcePicker->setMagnetWithoutMetadata(!m_currentContext->torrentDescr.info().has_value());
+
+    connect(m_sourcePicker, &HybridGui::SourcePicker::selectionChanged, this, [this]
+    {
+        if (!m_currentContext)
+            return;
+        // Magnet metadata comes from the swarm: fetch it only when the chosen source allows P2P (I5).
+        const BitTorrent::TorrentDescriptor &descr = m_currentContext->torrentDescr;
+        if (descr.info().has_value())
+            return;
+        auto *session = BitTorrent::Session::instance();
+        if (Hybrid::policyAllowsP2P(m_sourcePicker->policy(), m_sourcePicker->p2pConsent()))
+        {
+            session->downloadMetadata(descr);
+            setMetadataProgressIndicator(true, tr("Retrieving metadata..."));
+        }
+        else
+        {
+            session->cancelDownloadMetadata(descr.infoHash().toTorrentID());
+            setMetadataProgressIndicator(false, tr("Metadata is not fetched from peers for this download source"));
+        }
+    });
+}
+
 void AddNewTorrentDialog::accept()
 {
     // Check "Save at" path selected is valid (only in Manual mode)
@@ -699,6 +744,12 @@ void AddNewTorrentDialog::accept()
         return;
 
     updateCurrentContext();
+    if (m_sourcePicker)
+    {
+        // qBitFusion: the chosen source is applied before the torrent reaches libtorrent.
+        Hybrid::HybridManager::instance()->setPendingPolicy(m_currentContext->torrentDescr.infoHash().toTorrentID()
+                , m_sourcePicker->policy(), m_sourcePicker->p2pConsent());
+    }
     emit torrentAccepted(m_currentContext->torrentDescr, m_currentContext->torrentParams);
 
     Preferences::instance()->setAddNewTorrentDialogEnabled(!m_ui->checkBoxNeverShow->isChecked());

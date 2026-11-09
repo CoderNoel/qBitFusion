@@ -40,6 +40,11 @@ class QListWidgetItem;
 
 class AdvancedSettings;
 
+namespace HybridGui
+{
+    class OptionsPage;
+}
+
 // actions on double-click on torrents
 enum DoubleClickAction
 {
@@ -66,6 +71,7 @@ class OptionsDialog final : public GUIApplicationComponent<QDialog>
     {
         TAB_UI,
         TAB_DOWNLOADS,
+        TAB_HYBRID,         // qBitFusion: inserted at runtime after setupUi()
         TAB_CONNECTION,
         TAB_SPEED,
         TAB_BITTORRENT,
@@ -209,6 +215,8 @@ private:
     QPushButton *m_applyButton = nullptr;
 
     AdvancedSettings *m_advancedSettings = nullptr;
+
+    HybridGui::OptionsPage *m_hybridPage = nullptr;
 
     bool m_refreshingIpFilter = false;
 

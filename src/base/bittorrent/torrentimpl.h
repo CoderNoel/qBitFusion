@@ -258,6 +258,13 @@ namespace BitTorrent
         // Session interface
         lt::torrent_handle nativeHandle() const;
 
+        // qBitFusion hybrid transport. Inert unless the hybrid layer holds this torrent.
+        void setTransportHold(bool hold);
+        bool isTransportHeld() const;
+        void setHybridHttpRate(qint64 bytesPerSecond);
+        qint64 hybridHttpRate() const;
+        void addExternalPiece(int pieceIndex, std::vector<char> &&data);
+
         int fileIndexFromNative(lt::file_index_t nativeFileIndex) const;
 
         void handleStateUpdate(const lt::torrent_status &nativeStatus);
@@ -307,6 +314,7 @@ namespace BitTorrent
         bool isMoveInProgress() const;
 
         void setAutoManaged(bool enable);
+        void applyNativeRunState();
 
         void doRenameFile(int index, const Path &path, int folderRenameJobID = -1);
         void doRenameFolder(const Path &oldFolderPath, const Path &newFolderPath) override;
@@ -380,6 +388,8 @@ namespace BitTorrent
         bool m_hasFirstLastPiecePriority = false;
         bool m_useAutoTMM = false;
         bool m_isStopped = false;
+        bool m_transportHold = false;
+        qint64 m_hybridHttpRate = 0;
         StopCondition m_stopCondition = StopCondition::None;
         SSLParameters m_sslParams;
 

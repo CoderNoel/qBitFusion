@@ -30,6 +30,7 @@
 #include "torrentimpl.h"
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 
 #ifdef Q_OS_WIN
@@ -623,6 +624,61 @@ void TorrentImpl::setAutoManaged(const bool enable)
         m_nativeHandle.set_flags(lt::torrent_flags::auto_managed);
     else
         m_nativeHandle.unset_flags(lt::torrent_flags::auto_managed);
+}
+
+void TorrentImpl::applyNativeRunState()
+{
+    // Single place deciding whether libtorrent may run this (not stopped) torrent. Without a
+    // qBitFusion transport hold this is exactly the upstream logic.
+    if (m_transportHold)
+    {
+        setAutoManaged(false);
+        m_nativeHandle.pause(lt::torrent_handle::graceful_pause);
+        return;
+    }
+
+    setAutoManaged(m_operatingMode == TorrentOperatingMode::AutoManaged);
+    if (m_operatingMode == TorrentOperatingMode::Forced)
+        m_nativeHandle.resume();
+}
+
+void TorrentImpl::setTransportHold(const bool hold)
+{
+    if (m_transportHold == hold)
+        return;
+
+    m_transportHold = hold;
+    if (hold)
+    {
+        setAutoManaged(false);
+        m_nativeHandle.pause(lt::torrent_handle::graceful_pause);
+    }
+    else if (!m_isStopped && (m_maintenanceJob == MaintenanceJob::None))
+    {
+        applyNativeRunState();
+    }
+    updateState();
+}
+
+bool TorrentImpl::isTransportHeld() const
+{
+    return m_transportHold;
+}
+
+void TorrentImpl::setHybridHttpRate(const qint64 bytesPerSecond)
+{
+    m_hybridHttpRate = std::max<qint64>(0, bytesPerSecond);
+}
+
+qint64 TorrentImpl::hybridHttpRate() const
+{
+    return m_hybridHttpRate;
+}
+
+void TorrentImpl::addExternalPiece(const int pieceIndex, std::vector<char> &&data)
+{
+    // No overwrite_existing: never race peer-written blocks (spec 03 section 2).
+    m_nativeHandle.add_piece(lt::piece_index_t {pieceIndex}, std::move(data));
 }
 
 Path TorrentImpl::makeActualPath(int index, const Path &path) const
@@ -1339,7 +1395,7 @@ void TorrentImpl::updateState()
             m_state = TorrentState::QueuedDownloading;
         else if (isForced())
             m_state = TorrentState::ForcedDownloading;
-        else if (m_nativeStatus.download_payload_rate > 0)
+        else if ((m_nativeStatus.download_payload_rate > 0) || (m_hybridHttpRate > 0))
             m_state = TorrentState::Downloading;
         else
             m_state = TorrentState::StalledDownloading;
@@ -1585,7 +1641,7 @@ int TorrentImpl::uploadPayloadRate() const
 int TorrentImpl::downloadPayloadRate() const
 {
     // workaround: suppress the speed for Stopped state
-    return isStopped() ? 0 : m_nativeStatus.download_payload_rate;
+    return isStopped() ? 0 : (m_nativeStatus.download_payload_rate + static_cast<int>(std::min<qint64>(m_hybridHttpRate, std::numeric_limits<int>::max())));
 }
 
 qlonglong TorrentImpl::totalPayloadUpload() const
@@ -1713,6 +1769,8 @@ void TorrentImpl::forceRecheck()
     if (!hasMetadata())
         return;
 
+    m_session->handleTorrentRecheckRequested(this);
+
     m_nativeHandle.force_recheck();
 
     // We have to force update the cached state, otherwise someone will be able to get
@@ -1733,9 +1791,7 @@ void TorrentImpl::forceRecheck()
         m_hasMissingFiles = false;
         if (!isStopped())
         {
-            setAutoManaged(m_operatingMode == TorrentOperatingMode::AutoManaged);
-            if (m_operatingMode == TorrentOperatingMode::Forced)
-                m_nativeHandle.resume();
+            applyNativeRunState();
         }
     }
 
@@ -1983,6 +2039,13 @@ void TorrentImpl::reload()
             p.flags &= ~(lt::torrent_flags::auto_managed | lt::torrent_flags::paused);
         }
 
+        if (m_transportHold)
+        {
+            // qBitFusion: a held torrent must never be re-added in a state that contacts the swarm.
+            p.flags |= lt::torrent_flags::paused;
+            p.flags &= ~lt::torrent_flags::auto_managed;
+        }
+
         const auto queuePos = m_nativeHandle.queue_position();
 
         m_nativeHandle = m_session->reloadTorrent(m_nativeHandle, std::move(p));
@@ -2058,9 +2121,7 @@ void TorrentImpl::start(const TorrentOperatingMode mode)
 
     if (m_maintenanceJob == MaintenanceJob::None)
     {
-        setAutoManaged(m_operatingMode == TorrentOperatingMode::AutoManaged);
-        if (m_operatingMode == TorrentOperatingMode::Forced)
-            m_nativeHandle.resume();
+        applyNativeRunState();
     }
 }
 
@@ -2176,9 +2237,7 @@ void TorrentImpl::handleTorrentChecked()
             {
                 // torrent is internally paused using NativeTorrentExtension after files checked
                 // so we need to resume it if there is no corresponding "stop condition" set
-                setAutoManaged(m_operatingMode == TorrentOperatingMode::AutoManaged);
-                if (m_operatingMode == TorrentOperatingMode::Forced)
-                    m_nativeHandle.resume();
+                applyNativeRunState();
             }
         }
 

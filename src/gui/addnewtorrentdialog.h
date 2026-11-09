@@ -39,6 +39,11 @@
 
 class LineEdit;
 
+namespace HybridGui
+{
+    class SourcePicker;
+}
+
 namespace BitTorrent
 {
     class TorrentDescriptor;
@@ -94,12 +99,15 @@ private:
     void loadState();
     void saveState();
     void setMetadataProgressIndicator(bool visibleIndicator, const QString &labelText = {});
+    void setupHybridSource();
     void setupTreeview();
     void saveTorrentFile();
     void showContentFilterContextMenu();
     void setContentFilterPattern();
 
     Ui::AddNewTorrentDialog *m_ui = nullptr;
+
+    HybridGui::SourcePicker *m_sourcePicker = nullptr;
     std::unique_ptr<TorrentContentAdaptor> m_contentAdaptor;
     int m_savePathIndex = -1;
     int m_downloadPathIndex = -1;

@@ -47,6 +47,7 @@ class QString;
 
 namespace BitTorrent
 {
+    class HybridHooks;
     class InfoHash;
     class Torrent;
     class TorrentDescriptor;
@@ -144,6 +145,11 @@ namespace BitTorrent
         static void initInstance();
         static void freeInstance();
         static Session *instance();
+
+        // qBitFusion optional extension seam; must be installed before initInstance().
+        static void setHybridHooks(HybridHooks *hooks);
+        static HybridHooks *hybridHooks();
+        virtual void setHybridAlertsEnabled() = 0;
 
         using QObject::QObject;
 

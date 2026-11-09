@@ -72,6 +72,7 @@
 #include "base/utils/random.h"
 #include "base/utils/sslkey.h"
 #include "advancedsettings.h"
+#include "hybrid/hybridoptionspage.h"
 #include "banlistoptionsdialog.h"
 #include "interfaces/iguiapplication.h"
 #include "ipsubnetwhitelistoptionsdialog.h"
@@ -167,6 +168,12 @@ OptionsDialog::OptionsDialog(IGUIApplication *app, QWidget *parent)
 {
     m_ui->setupUi(this);
     m_applyButton = m_ui->buttonBox->button(QDialogButtonBox::Apply);
+
+    // qBitFusion: "Hybrid sources" page right after "Downloads" (row TAB_HYBRID).
+    m_hybridPage = new HybridGui::OptionsPage(m_ui->tabOption);
+    m_ui->tabOption->insertWidget(TAB_HYBRID, m_hybridPage);
+    m_ui->tabSelection->insertItem(TAB_HYBRID, new QListWidgetItem(UIThemeManager::instance()->getIcon(u"folder-remote"_s), tr("Hybrid sources")));
+    connect(m_hybridPage, &HybridGui::OptionsPage::changed, this, &ThisType::enableApplyButton);
 
 #ifdef Q_OS_UNIX
     setWindowTitle(tr("Preferences"));
@@ -1694,6 +1701,7 @@ void OptionsDialog::saveOptions() const
     saveWebUITabOptions();
 #endif
     m_advancedSettings->saveAdvancedSettings();
+    m_hybridPage->save();
 
     // Assume that user changed multiple settings
     // so it's best to save immediately

@@ -30,7 +30,9 @@
 #include "transferlistwidget.h"
 
 #include <algorithm>
+#include <optional>
 
+#include <QActionGroup>
 #include <QClipboard>
 #include <QDebug>
 #include <QFileDialog>
@@ -45,6 +47,7 @@
 #include <QWheelEvent>
 
 #include "base/bittorrent/session.h"
+#include "base/hybrid/hybridmanager.h"
 #include "base/bittorrent/torrent.h"
 #include "base/bittorrent/trackerentrystatus.h"
 #include "base/global.h"
@@ -71,6 +74,7 @@
 #include "transferlistdelegate.h"
 #include "transferlistsortmodel.h"
 #include "tristateaction.h"
+#include "hybrid/hybridwidgets.h"
 #include "uithememanager.h"
 #include "utils.h"
 #include "utils/keysequence.h"
@@ -153,10 +157,20 @@ TransferListWidget::TransferListWidget(IGUIApplication *app, QWidget *parent)
     header()->setStretchLastSection(false);
     header()->setTextElideMode(Qt::ElideRight);
 
+    // qBitFusion: the "Source" column follows the hybrid feature (hidden when unused).
+    const auto syncSourceColumn = [this]
+    {
+        const auto *manager = Hybrid::HybridManager::instance();
+        setColumnHidden(TransferListModel::TR_SOURCE, !(manager->isEnabled() || (manager->hybridTorrentCount() > 0)));
+    };
+    connect(Hybrid::HybridManager::instance(), &Hybrid::HybridManager::settingsChanged, this, syncSourceColumn);
+    QMetaObject::invokeMethod(this, syncSourceColumn, Qt::QueuedConnection);
+
     // Default hidden columns
     if (!columnLoaded)
     {
         setColumnHidden(TransferListModel::TR_CREATE_DATE, true);
+        setColumnHidden(TransferListModel::TR_SOURCE, true);
         setColumnHidden(TransferListModel::TR_ADD_DATE, true);
         setColumnHidden(TransferListModel::TR_SEED_DATE, true);
         setColumnHidden(TransferListModel::TR_UPLIMIT, true);
@@ -987,6 +1001,54 @@ void TransferListWidget::clearSelectionTags()
     applyToSelectedTorrents([](BitTorrent::Torrent *const torrent) { torrent->clearTags(); });
 }
 
+void TransferListWidget::addHybridSourceMenu(QMenu *listMenu)
+{
+    // qBitFusion: per-torrent download source. Only shown when the feature is enabled or the
+    // selection already uses it, so the upstream menu is unchanged otherwise.
+    auto *manager = Hybrid::HybridManager::instance();
+    const QList<BitTorrent::Torrent *> torrents = getSelectedTorrents();
+    bool anyHybrid = false;
+    std::optional<Hybrid::TransportPolicy> common;
+    bool mixed = false;
+    for (const BitTorrent::Torrent *torrent : torrents)
+    {
+        const Hybrid::TransportPolicy policy = manager->policyFor(torrent->id());
+        anyHybrid = anyHybrid || (policy != Hybrid::TransportPolicy::TorrentOnly);
+        if (!common)
+            common = policy;
+        else if (*common != policy)
+            mixed = true;
+    }
+    if (!manager->isEnabled() && !anyHybrid)
+        return;
+
+    QMenu *sourceMenu = listMenu->addMenu(UIThemeManager::instance()->getIcon(u"folder-remote"_s), tr("Download so&urce"));
+    sourceMenu->setToolTipsVisible(true);
+    auto *group = new QActionGroup(sourceMenu);
+    const auto addChoice = [&](const Hybrid::TransportPolicy policy, const QString &text, const QString &tip)
+    {
+        QAction *action = sourceMenu->addAction(HybridGui::iconFor(policy), text);
+        action->setToolTip(tip);
+        action->setCheckable(true);
+        action->setChecked(!mixed && common && (*common == policy));
+        group->addAction(action);
+        connect(action, &QAction::triggered, this, [this, policy]
+        {
+            bool consent = false;
+            if (policy == Hybrid::TransportPolicy::DebridPreferred)
+                consent = HybridGui::confirmP2PFallback(this);
+            for (BitTorrent::Torrent *torrent : asConst(getSelectedTorrents()))
+                Hybrid::HybridManager::instance()->setTorrentPolicy(torrent, policy, consent);
+        });
+    };
+    addChoice(Hybrid::TransportPolicy::DebridOnly, tr("Debrid only")
+            , tr("HTTPS only. No peer, tracker or DHT activity for these torrents."));
+    addChoice(Hybrid::TransportPolicy::DebridPreferred, tr("Debrid preferred, BitTorrent fallback…")
+            , tr("HTTPS while available; asks before allowing BitTorrent peers."));
+    addChoice(Hybrid::TransportPolicy::TorrentOnly, tr("BitTorrent (standard)")
+            , tr("Standard qBittorrent behaviour."));
+}
+
 void TransferListWidget::displayListMenu()
 {
     const QModelIndexList selectedIndexes = selectionModel()->selectedRows();
@@ -1264,6 +1326,8 @@ void TransferListWidget::displayListMenu()
         ? (firstAutoTMM ? Qt::Checked : Qt::Unchecked)
         : Qt::PartiallyChecked);
     listMenu->addAction(actionAutoTMM);
+
+    addHybridSourceMenu(listMenu);
 
     listMenu->addSeparator();
     listMenu->addAction(actionTorrentOptions);

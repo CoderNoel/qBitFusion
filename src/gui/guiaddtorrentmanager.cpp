@@ -32,6 +32,7 @@
 #include <QScreen>
 
 #include "base/bittorrent/session.h"
+#include "base/hybrid/hybridmanager.h"
 #include "base/bittorrent/torrentdescriptor.h"
 #include "base/net/downloadmanager.h"
 #include "base/preferences.h"
@@ -248,7 +249,12 @@ bool GUIAddTorrentManager::processTorrent(const QString &source
         return false;
     }
 
-    if (!hasMetadata)
+    // qBitFusion: never fetch magnet metadata from the swarm when the default source forbids P2P (I5).
+    // The dialog starts the fetch itself if the user picks a source that allows peers.
+    const auto *hybrid = Hybrid::HybridManager::instance();
+    const bool swarmMetadataAllowed = !hybrid || !hybrid->isEnabled()
+            || Hybrid::policyAllowsP2P(hybrid->defaultPolicy(), hybrid->defaultP2PConsent());
+    if (!hasMetadata && swarmMetadataAllowed)
         btSession()->downloadMetadata(torrentDescr);
 
 #ifdef Q_OS_MACOS

@@ -38,6 +38,8 @@
 #include "guiapplicationcomponent.h"
 #include "transferlistmodel.h"
 
+class QMenu;
+
 class Path;
 class TransferListSortModel;
 
@@ -112,6 +114,7 @@ signals:
 private slots:
     void torrentDoubleClicked();
     void displayListMenu();
+    void addHybridSourceMenu(QMenu *listMenu);
     void displayColumnHeaderMenu();
     void currentChanged(const QModelIndex &current, const QModelIndex &previous) override;
     void setSelectedTorrentsSuperSeeding(bool enabled) const;

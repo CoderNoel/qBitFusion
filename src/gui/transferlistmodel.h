@@ -93,6 +93,7 @@ public:
         TR_REANNOUNCE,
         TR_PRIVATE,
         TR_CREATE_DATE,
+        TR_SOURCE,          // qBitFusion: download source (BitTorrent / debrid HTTPS)
 
         NB_COLUMNS
     };
@@ -126,6 +127,7 @@ private:
     void configure();
     void loadUIThemeResources();
     QString displayValue(const BitTorrent::Torrent *torrent, int column) const;
+    QString hybridSourceText(const BitTorrent::Torrent *torrent) const;
     QVariant internalValue(const BitTorrent::Torrent *torrent, int column, bool alt) const;
     QIcon getIconByState(BitTorrent::TorrentState state) const;
 

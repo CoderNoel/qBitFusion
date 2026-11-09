@@ -492,6 +492,9 @@ namespace BitTorrent
         void handleTorrentStopped(TorrentImpl *torrent);
         void handleTorrentStarted(TorrentImpl *torrent);
         void handleTorrentChecked(TorrentImpl *torrent);
+        void handleTorrentRecheckRequested(TorrentImpl *torrent);
+        void setHybridAlertsEnabled() override;
+
         void handleTorrentFinished(TorrentImpl *torrent);
         void handleTorrentTrackersAdded(TorrentImpl *torrent, const QList<TrackerEntry> &newTrackers);
         void handleTorrentTrackersRemoved(TorrentImpl *torrent, const QStringList &deletedTrackers);
@@ -603,6 +606,7 @@ namespace BitTorrent
 
         void handleAlert(lt::alert *alert);
         void handleAddTorrentAlert(const lt::add_torrent_alert *alert);
+        void handleHybridAlert(const lt::alert *alert);
         void handleStateUpdateAlert(const lt::state_update_alert *alert);
         void handleMetadataReceivedAlert(const lt::metadata_received_alert *alert);
         void handleFileErrorAlert(const lt::file_error_alert *alert);
