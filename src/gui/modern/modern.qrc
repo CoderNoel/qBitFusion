@@ -1,0 +1,11 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/qbitfusion">
+    <file>modern.qss</file>
+    <file>check.svg</file>
+    <file>dash.svg</file>
+    <file>dot.svg</file>
+    <file>chevron-down.svg</file>
+    <file>chevron-up.svg</file>
+  </qresource>
+</RCC>

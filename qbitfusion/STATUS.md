@@ -2,7 +2,7 @@
 
 **Issue/task ID:** CORE-001…005, NET-001…003, PROVIDER-001/002 (adapter, not live-tested), STATE-001/002, SEC-001, SEC-002 (partial), UX-001, UX-002 (desktop only), QA-001 (partial).
 
-**Baseline commit and environment:** qBittorrent `release-5.3.0` @ `9213075d` on branch `feature/hybrid-debrid` (uncommitted). Windows 11 Pro 10.0.26300, MSVC 14.44.35207, CMake 4.4.3/Ninja, Qt 6.10.3, libtorrent 2.1.2 (`a610c6ef4`, ABI 100), Boost 1.91.0, OpenSSL 3.6.5, zlib 1.3.2. Reproduce: `pwsh qbitfusion/scripts/bootstrap-windows.ps1`, then `pwsh qbitfusion/scripts/build-windows.ps1`.
+**Baseline commit and environment:** qBittorrent `release-5.3.0` @ `9213075d` on branch `feature/hybrid-debrid` (uncommitted). Windows 11 Pro 10.0.26300, MSVC 14.44.35207, CMake 4.4.3/Ninja, Qt 6.10.3, libtorrent 2.1.2 (`a610c6ef4`, ABI 100), Boost 1.91.0, OpenSSL 3.6.5, zlib 1.3.2. Reproduce: `pwsh qbitfusion/scripts/bootstrap-windows.ps1`, then `pwsh qbitfusion/scripts/build-windows.ps1`. Install for the current user (Release build, Start menu + desktop shortcuts, Settings > Apps entry, isolated portable profile): `pwsh qbitfusion/scripts/install-windows.ps1`.
 
 ## What changed
 
@@ -11,6 +11,7 @@
 | Hybrid core (new, provider-neutral) | `src/base/hybrid/*`: types, strict Range validation, URL/SSRF guard, exact file binding, piece ownership arbiter, provider health/circuit breaker, state machine, policy sidecar, token bucket, range fetcher, piece assembler, coordinator, libtorrent layout adapter, manager, Windows credential store, Real-Debrid adapter |
 | Upstream seams (small) | `bittorrent/hybridhooks.h` (new), `hybridtorrentsink.*` (new); `session.h/sessionimpl.*` (+hold at add/load, piece alerts, recheck hook); `torrentimpl.*` (transport hold through one `applyNativeRunState()`, HTTP rate, `addExternalPiece`); `app/application.cpp` (init/free) |
 | GUI | `src/gui/hybrid/*` (new): Options page, source picker, consent prompt, device sign-in dialog; `optionsdialog.*`, `transferlistmodel.*`, `transferlistwidget.*`, `addnewtorrentdialog.*`, `guiaddtorrentmanager.cpp` |
+| Modern appearance | `src/gui/modern/*` (new): curated light/dark palettes, one palette-driven stylesheet with per-scheme tokens, SVG glyphs, rounded progress pills. Hooked into `uithememanager.cpp` (on by default; a custom `.qbtheme` or an explicitly chosen style still wins), `progressbarpainter.cpp`, `optionsdialog.*` ("Use the modern qBitFusion appearance" toggle in Behavior, applies after restart) and `proptabbar.cpp` (tab tag for the segmented style). Verified by screenshots in light and dark. |
 | Evidence and tooling | `qbitfusion/REPO_RECON.md`, `DECISIONS.md`, `spike/`, `scripts/` |
 
 ## Why existing APIs were sufficient or insufficient

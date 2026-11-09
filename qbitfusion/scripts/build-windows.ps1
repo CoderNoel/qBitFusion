@@ -7,14 +7,23 @@
   pwsh qbitfusion/scripts/build-windows.ps1              # build + ctest (target "check")
   pwsh qbitfusion/scripts/build-windows.ps1 -Spike       # build + run the libtorrent spike only
   pwsh qbitfusion/scripts/build-windows.ps1 -BuildDir build-off -NoTests
+  pwsh qbitfusion/scripts/build-windows.ps1 -Release     # optimised app build in build-release, no tests
 #>
 param(
     [string]$BuildDir = "build",
     [string]$Config = "RelWithDebInfo",
     [switch]$Spike,
     [switch]$NoTests,
-    [switch]$Reconfigure
+    [switch]$Reconfigure,
+    # Shipping build: Release, no test targets, no forced asserts. Used by install-windows.ps1.
+    [switch]$Release
 )
+
+if ($Release) {
+    if (-not $PSBoundParameters.ContainsKey("BuildDir")) { $BuildDir = "build-release" }
+    $Config = "Release"
+    $NoTests = $true
+}
 
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
@@ -49,10 +58,11 @@ if ($Spike) {
 
 $build = Join-Path $repo $BuildDir
 if ($Reconfigure -or -not (Test-Path "$build/CMakeCache.txt")) {
-    $env:CXXFLAGS = "/DQT_FORCE_ASSERTS /WX"
+    $env:CXXFLAGS = if ($Release) { "/WX" } else { "/DQT_FORCE_ASSERTS /WX" }
+    $testing = if ($Release) { "-DTESTING=OFF" } else { "-DTESTING=ON" }
     cmake -S $repo -B $build @common `
         "-DMSVC_RUNTIME_DYNAMIC=ON" `
-        "-DTESTING=ON" `
+        $testing `
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
     Remove-Item Env:CXXFLAGS
 }

@@ -41,6 +41,7 @@
 #include "base/path.h"
 #include "base/profile.h"
 #include "base/preferences.h"
+#include "modern/modernappearance.h"
 #include "uithemecommon.h"
 
 #ifdef Q_OS_WIN
@@ -56,6 +57,14 @@ namespace
         const QPalette palette = qApp->palette();
         const QColor &color = palette.color(QPalette::Active, QPalette::Base);
         return (color.lightness() < 127);
+    }
+
+    bool prefersDarkColorScheme()
+    {
+        const Qt::ColorScheme scheme = QApplication::styleHints()->colorScheme();
+        if (scheme != Qt::ColorScheme::Unknown)
+            return scheme == Qt::ColorScheme::Dark;
+        return isDarkTheme();
     }
 
     Path resolveThemePath(const Path &themePath)
@@ -129,6 +138,14 @@ UIThemeManager::UIThemeManager()
         applyPalette();
         applyStyleSheet();
     }
+    else if (ModernAppearance::isEnabledSetting())
+    {
+        // qBitFusion modern look. Fusion renders stylesheets consistently on every platform; an
+        // explicitly chosen style is respected.
+        if (Preferences::instance()->getStyle().compare(u"system", Qt::CaseInsensitive) == 0)
+            QApplication::setStyle(u"fusion"_s);
+        ModernAppearance::apply(prefersDarkColorScheme());
+    }
 }
 
 UIThemeManager *UIThemeManager::instance()
@@ -192,6 +209,9 @@ void UIThemeManager::onColorSchemeChanged()
 
     // workaround to refresh styled controls once color scheme is changed
     QApplication::setStyle(QApplication::style()->name());
+
+    if (ModernAppearance::isActive())
+        ModernAppearance::apply(prefersDarkColorScheme());
 }
 
 QIcon UIThemeManager::getIcon(const QString &iconId, [[maybe_unused]] const QString &fallback, const ColorMode colorMode) const

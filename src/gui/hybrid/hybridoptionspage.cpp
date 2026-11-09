@@ -255,7 +255,7 @@ void HybridGui::OptionsPage::refreshAccount()
         text = tr("Account error");
         break;
     case Hybrid::AccountState::NotConfigured:
-        dot = u"<span style='color:#8a8a8a;font-size:16px'>○</span>"_s;
+        dot = u"<span style='color:#8a8a8a;font-size:16px'>●</span>"_s;
         text = tr("Not signed in");
         break;
     }

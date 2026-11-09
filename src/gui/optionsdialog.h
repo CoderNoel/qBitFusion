@@ -39,6 +39,7 @@
 class QListWidgetItem;
 
 class AdvancedSettings;
+class QCheckBox;
 
 namespace HybridGui
 {
@@ -217,6 +218,7 @@ private:
     AdvancedSettings *m_advancedSettings = nullptr;
 
     HybridGui::OptionsPage *m_hybridPage = nullptr;
+    QCheckBox *m_checkModernAppearance = nullptr;
 
     bool m_refreshingIpFilter = false;
 

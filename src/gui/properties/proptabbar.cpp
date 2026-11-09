@@ -98,6 +98,9 @@ PropTabBar::PropTabBar(QWidget *parent)
     speedButton->setShortcut(Qt::ALT | Qt::Key_D);
     addWidget(speedButton);
     m_btnGroup->addButton(speedButton, SpeedTab);
+    // qBitFusion: lets the modern stylesheet render these as a segmented tab bar.
+    for (QAbstractButton *button : m_btnGroup->buttons())
+        button->setProperty("qbfPropTab", true);
     // SIGNAL/SLOT
     connect(m_btnGroup, &QButtonGroup::idClicked
             , this, &PropTabBar::setCurrentIndex);

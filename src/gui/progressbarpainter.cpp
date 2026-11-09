@@ -39,6 +39,7 @@
 #endif
 
 #include "base/global.h"
+#include "gui/modern/modernappearance.h"
 #include "gui/uithememanager.h"
 
 ProgressBarPainter::ProgressBarPainter(QObject *parent)
@@ -56,6 +57,16 @@ ProgressBarPainter::ProgressBarPainter(QObject *parent)
 
 void ProgressBarPainter::paint(QPainter *painter, const QStyleOptionViewItem &option, const QString &text, const int progress, const QColor &color) const
 {
+    if (ModernAppearance::isActive())
+    {
+        // Selection/hover background from the view's (stylesheet-aware) style, then a rounded pill.
+        const QStyle *viewStyle = option.widget ? option.widget->style() : m_dummyProgressBar.style();
+        viewStyle->drawPrimitive(QStyle::PE_PanelItemViewItem, &option, painter, option.widget);
+        ModernAppearance::paintProgressPill(painter, option.rect, progress, text, (color.isValid() ? color : m_chunkColor)
+                , option.state.testFlag(QStyle::State_Selected), option.palette);
+        return;
+    }
+
     QStyleOptionProgressBar styleOption;
     styleOption.initFrom(&m_dummyProgressBar);
     // QStyleOptionProgressBar fields

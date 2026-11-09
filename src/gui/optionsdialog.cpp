@@ -35,6 +35,8 @@
 #include <limits>
 
 #include <QApplication>
+#include <QBoxLayout>
+#include <QCheckBox>
 #include <QClipboard>
 #include <QDebug>
 #include <QDesktopServices>
@@ -73,6 +75,7 @@
 #include "base/utils/sslkey.h"
 #include "advancedsettings.h"
 #include "hybrid/hybridoptionspage.h"
+#include "modern/modernappearance.h"
 #include "banlistoptionsdialog.h"
 #include "interfaces/iguiapplication.h"
 #include "ipsubnetwhitelistoptionsdialog.h"
@@ -220,6 +223,14 @@ OptionsDialog::OptionsDialog(IGUIApplication *app, QWidget *parent)
 #ifndef DISABLE_WEBUI
     loadWebUITabOptions();
 #endif
+
+    // qBitFusion: modern appearance toggle, placed above "Use custom UI Theme".
+    m_checkModernAppearance = new QCheckBox(tr("Use the modern qBitFusion appearance (takes effect after restart)"), m_ui->checkUseCustomTheme->parentWidget());
+    m_checkModernAppearance->setToolTip(tr("Turn off to restore the classic qBittorrent look. A custom UI theme, when enabled, always takes priority."));
+    if (auto *themeLayout = qobject_cast<QBoxLayout *>(m_ui->checkUseCustomTheme->parentWidget()->layout()))
+        themeLayout->insertWidget(themeLayout->indexOf(m_ui->checkUseCustomTheme), m_checkModernAppearance);
+    m_checkModernAppearance->setChecked(ModernAppearance::isEnabledSetting());
+    connect(m_checkModernAppearance, &QCheckBox::toggled, this, &ThisType::enableApplyButton);
 
     // Load Advanced settings
     m_advancedSettings = new AdvancedSettings(app, m_ui->tabAdvancedPage);
@@ -1702,6 +1713,7 @@ void OptionsDialog::saveOptions() const
 #endif
     m_advancedSettings->saveAdvancedSettings();
     m_hybridPage->save();
+    ModernAppearance::setEnabledSetting(m_checkModernAppearance->isChecked());
 
     // Assume that user changed multiple settings
     // so it's best to save immediately

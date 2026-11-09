@@ -63,6 +63,7 @@ add_library(qbt_gui STATIC
     guiaddtorrentmanager.h
     hybrid/hybridoptionspage.h
     hybrid/hybridwidgets.h
+    modern/modernappearance.h
     guiapplicationcomponent.h
     hidabletabwidget.h
     interfaces/iguiapplication.h
@@ -173,6 +174,8 @@ add_library(qbt_gui STATIC
     guiaddtorrentmanager.cpp
     hybrid/hybridoptionspage.cpp
     hybrid/hybridwidgets.cpp
+    modern/modernappearance.cpp
+    modern/modern.qrc
     hidabletabwidget.cpp
     ipsubnetwhitelistoptionsdialog.cpp
     lineedit.cpp
