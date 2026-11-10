@@ -481,7 +481,7 @@
                   <string>Replaces multi-selection (hold Alt key to invert)</string>
                  </property>
                  <property name="text">
-                  <string>Drag content from qBittorrent</string>
+                  <string>Drag content from qBitFusion</string>
                  </property>
                 </widget>
                </item>
@@ -520,7 +520,7 @@
                <item>
                 <widget class="QCheckBox" name="checkStartup">
                  <property name="text">
-                  <string>Start qBittorrent on Windows start up</string>
+                  <string>Start qBitFusion on Windows start up</string>
                  </property>
                 </widget>
                </item>
@@ -546,7 +546,7 @@
                  <item>
                   <widget class="QComboBox" name="windowStateComboBox">
                    <property name="toolTip">
-                    <string>qBittorrent window state on start up</string>
+                    <string>qBitFusion window state on start up</string>
                    </property>
                   </widget>
                  </item>
@@ -591,7 +591,7 @@
                <item>
                 <widget class="QGroupBox" name="checkShowSystray">
                  <property name="title">
-                  <string>Show &amp;qBittorrent in notification area</string>
+                  <string>Show &amp;qBitFusion in notification area</string>
                  </property>
                  <property name="checkable">
                   <bool>true</bool>
@@ -603,7 +603,7 @@
                      <string>When minimizing, the main window is closed and must be reopened from the systray icon</string>
                     </property>
                     <property name="text">
-                     <string>Minimize qBittorrent to notification area</string>
+                     <string>Minimize qBitFusion to notification area</string>
                     </property>
                     <property name="checked">
                      <bool>false</bool>
@@ -616,7 +616,7 @@
                      <string>The systray icon will still be visible when closing the main window</string>
                     </property>
                     <property name="text">
-                     <string extracomment="The systray icon will still be visible when closing the main window">Close qBittorrent to notification area</string>
+                     <string extracomment="The systray icon will still be visible when closing the main window">Close qBitFusion to notification area</string>
                     </property>
                    </widget>
                   </item>
@@ -685,14 +685,14 @@
                      <item>
                       <widget class="QCheckBox" name="checkAssociateTorrents">
                        <property name="text">
-                        <string>Use qBittorrent for .torrent files</string>
+                        <string>Use qBitFusion for .torrent files</string>
                        </property>
                       </widget>
                      </item>
                      <item>
                       <widget class="QCheckBox" name="checkAssociateMagnetLinks">
                        <property name="text">
-                        <string>Use qBittorrent for magnet links</string>
+                        <string>Use qBitFusion for magnet links</string>
                        </property>
                       </widget>
                      </item>
@@ -717,7 +717,7 @@
                      <item>
                       <widget class="QLabel" name="labelSetAssoc">
                        <property name="text">
-                        <string>To set qBittorrent as the default program for .torrent files and Magnet links, click the button below and add them manually:</string>
+                        <string>To set qBitFusion as the default program for .torrent files and Magnet links, click the button below and add them manually:</string>
                        </property>
                        <property name="wordWrap">
                         <bool>true</bool>
@@ -760,7 +760,7 @@
                <item>
                 <widget class="QCheckBox" name="checkShowMenuBarIcon">
                  <property name="text">
-                  <string>Show qBittorrent in menu bar</string>
+                  <string>Show qBitFusion in menu bar</string>
                  </property>
                 </widget>
                </item>

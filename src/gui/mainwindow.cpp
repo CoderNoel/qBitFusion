@@ -51,6 +51,9 @@
 #include <QMimeData>
 #include <QProcess>
 #include <QPushButton>
+#include <QToolBar>
+#include <QToolButton>
+#include <QVBoxLayout>
 #include <QShortcut>
 #include <QSplitter>
 #include <QStatusBar>
@@ -85,6 +88,8 @@
 #include "hidabletabwidget.h"
 #include "interfaces/iguiapplication.h"
 #include "lineedit.h"
+#include "modern/modernappearance.h"
+#include "modern/modernwidgets.h"
 #include "optionsdialog.h"
 #include "powermanagement/powermanagement.h"
 #include "properties/peerlistwidget.h"
@@ -242,8 +247,8 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
 
     m_columnFilterEdit = new LineEdit;
     m_columnFilterEdit->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_columnFilterEdit->setFixedWidth(200);
-    m_columnFilterEdit->setPlaceholderText(tr("Filter torrents..."));
+    m_columnFilterEdit->setFixedWidth(ModernAppearance::isActive() ? 300 : 200);
+    m_columnFilterEdit->setPlaceholderText(ModernAppearance::isActive() ? tr("Search torrents") : tr("Filter torrents..."));
     m_columnFilterEdit->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(m_columnFilterEdit, &QWidget::customContextMenuRequested, this, &MainWindow::showFilterContextMenu);
 
@@ -251,18 +256,32 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
 
     QHBoxLayout *columnFilterLayout = new QHBoxLayout;
     columnFilterLayout->setContentsMargins(0, 0, 0, 0);
-    columnFilterLayout->addWidget(columnFilterSpacer);
-    columnFilterLayout->addWidget(m_columnFilterEdit);
-    columnFilterLayout->addWidget(new QLabel(tr("Filter by:")), 0);
-    columnFilterLayout->addWidget(m_columnFilterComboBox, 0);
+    if (ModernAppearance::isActive())
+    {
+        // Search field with a compact "search in" selector; the header places it (setupModernShell()).
+        delete columnFilterSpacer;
+        columnFilterLayout->setSpacing(6);
+        columnFilterLayout->addWidget(m_columnFilterEdit);
+        columnFilterLayout->addWidget(m_columnFilterComboBox, 0);
+        m_columnFilterComboBox->setToolTip(tr("Filter by:"));
+        m_columnFilterWidget = new QWidget(this);
+        m_columnFilterWidget->setLayout(columnFilterLayout);
+    }
+    else
+    {
+        columnFilterLayout->addWidget(columnFilterSpacer);
+        columnFilterLayout->addWidget(m_columnFilterEdit);
+        columnFilterLayout->addWidget(new QLabel(tr("Filter by:")), 0);
+        columnFilterLayout->addWidget(m_columnFilterComboBox, 0);
 
-    m_columnFilterWidget = new QWidget(this);
-    m_columnFilterWidget->setLayout(columnFilterLayout);
-    m_columnFilterAction = m_ui->toolBar->insertWidget(m_ui->actionLock, m_columnFilterWidget);
+        m_columnFilterWidget = new QWidget(this);
+        m_columnFilterWidget->setLayout(columnFilterLayout);
+        m_columnFilterAction = m_ui->toolBar->insertWidget(m_ui->actionLock, m_columnFilterWidget);
 
-    auto *spacer = new QWidget(this);
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_ui->toolBar->insertWidget(m_columnFilterAction, spacer);
+        auto *spacer = new QWidget(this);
+        spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        m_ui->toolBar->insertWidget(m_columnFilterAction, spacer);
+    }
 
     // Transfer List tab
     m_transferListWidget = new TransferListWidget(app, this);
@@ -305,7 +324,10 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
 
     m_ui->centralWidgetLayout->addWidget(m_tabs);
 
-    m_queueSeparator = m_ui->toolBar->insertSeparator(m_ui->actionTopQueuePos);
+    if (ModernAppearance::isActive())
+        setupModernShell(hSplitter);   // also creates m_queueSeparator
+    else
+        m_queueSeparator = m_ui->toolBar->insertSeparator(m_ui->actionTopQueuePos);
     m_queueSeparatorMenu = m_ui->menuEdit->insertSeparator(m_ui->actionTopQueuePos);
 
 #ifdef Q_OS_MACOS
@@ -345,6 +367,7 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     connect(m_ui->actionCheckForUpdates, &QAction::triggered, this, [this]() { checkProgramUpdate(true); });
+    m_ui->actionCheckForUpdates->setVisible(!ProgramUpdater::isDisabledForThisBuild());
 
     // trigger an early check on startup
     if (pref->isUpdateCheckEnabled())
@@ -494,7 +517,7 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
                 hide();
                 if (!pref->minimizeToTrayNotified())
                 {
-                    app->desktopIntegration()->showNotification(tr("qBittorrent is minimized to tray"), tr("This behavior can be changed in the settings. You won't be reminded again."));
+                    app->desktopIntegration()->showNotification(tr("qBitFusion is minimized to tray"), tr("This behavior can be changed in the settings. You won't be reminded again."));
                     pref->setMinimizeToTrayNotified(true);
                 }
             }
@@ -556,6 +579,252 @@ MainWindow::~MainWindow()
     delete m_ui;
 }
 
+void MainWindow::setupModernShell(QSplitter *transferSplitter)
+{
+    const UIThemeManager *theme = UIThemeManager::instance();
+    auto *tabs = static_cast<HidableTabWidget *>(m_tabs.data());
+
+    // One-time defaults that suit the modern layout. They remain ordinary options afterwards.
+    if (SettingValue<bool> defaultsApplied {SETTINGS_KEY(u"ModernDefaultsApplied"_s)}; !defaultsApplied.get(false))
+    {
+        Preferences::instance()->setHideZeroStatusFilters(true);
+        defaultsApplied = true;
+    }
+
+    // The menus live in one overflow menu. With the menu bar hidden, their actions must be
+    // registered on the window itself or their shortcuts would stop working.
+    m_ui->menubar->hide();
+    const auto registerActions = [this](const auto &self, const QList<QAction *> &actions) -> void
+    {
+        for (QAction *action : actions)
+        {
+            if (action->isSeparator())
+                continue;
+            if (const QMenu *menu = action->menu())
+                self(self, menu->actions());
+            else
+                addAction(action);
+        }
+    };
+    registerActions(registerActions, m_ui->menubar->actions());
+
+    // ---- Header: brand, page switcher, search, primary action, quick toggles, overflow menu
+    QToolBar *header = m_ui->toolBar;
+    header->clear();
+    header->setProperty("qbfHeader", true);
+    header->setMovable(false);
+    header->setFloatable(false);
+    header->setContextMenuPolicy(Qt::PreventContextMenu);
+    header->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    header->setIconSize({18, 18});
+
+    header->addWidget(Modern::createBrandWidget(header));
+
+    auto *pageSwitcher = new QWidget(header);
+    auto *pageSwitcherLayout = new QHBoxLayout(pageSwitcher);
+    pageSwitcherLayout->setContentsMargins(0, 0, 0, 0);
+    pageSwitcherLayout->setSpacing(2);
+    m_navTransfers = new Modern::NavButton(theme->getIcon(u"qbf-transfers"_s), tr("Transfers"), pageSwitcher);
+    m_navSearch = new Modern::NavButton(theme->getIcon(u"qbf-search-page"_s), tr("Search"), pageSwitcher);
+    m_navRSS = new Modern::NavButton(theme->getIcon(u"qbf-rss"_s), tr("RSS"), pageSwitcher);
+    m_navLog = new Modern::NavButton(theme->getIcon(u"qbf-log"_s), tr("Log"), pageSwitcher);
+    m_navSearch->setToolTip(tr("Search for torrents with search plugins"));
+    m_navRSS->setToolTip(tr("Follow RSS feeds and download new items automatically"));
+    m_navLog->setToolTip(tr("Execution log"));
+    for (Modern::NavButton *button : {m_navTransfers, m_navSearch, m_navRSS, m_navLog})
+        pageSwitcherLayout->addWidget(button);
+    header->addWidget(pageSwitcher);
+
+    // Pages that are switched off in View are still offered here; opening one switches it on.
+    connect(m_navTransfers, &QAbstractButton::clicked, this, [this]
+    {
+        displayTransferTab();
+        refreshPageSwitcher();
+    });
+    connect(m_navSearch, &QAbstractButton::clicked, this, [this]
+    {
+        if (!m_searchWidget)
+        {
+            // Goes through the same Python check as View > Search Engine.
+            m_ui->actionSearchWidget->setChecked(true);
+            on_actionSearchWidget_triggered();
+        }
+        if (m_searchWidget)
+            m_tabs->setCurrentWidget(m_searchWidget);
+        refreshPageSwitcher();
+    });
+    connect(m_navRSS, &QAbstractButton::clicked, this, [this]
+    {
+        displayRSSTab();
+        refreshPageSwitcher();
+    });
+    connect(m_navLog, &QAbstractButton::clicked, this, [this]
+    {
+        displayExecutionLogTab();
+        refreshPageSwitcher();
+    });
+    connect(tabs, &QTabWidget::currentChanged, this, &MainWindow::refreshPageSwitcher);
+    connect(tabs, &HidableTabWidget::tabsChanged, this, &MainWindow::refreshPageSwitcher, Qt::QueuedConnection);
+    tabs->setTabBarAlwaysHidden(true);
+    tabs->setDocumentMode(true);
+
+    auto *headerSpacer = new QWidget(header);
+    headerSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    header->addWidget(headerSpacer);
+
+    m_columnFilterAction = header->addWidget(m_columnFilterWidget);
+
+    auto *addButton = new QToolButton(header);
+    addButton->setObjectName(u"qbfAddButton"_s);
+    addButton->setText(tr("Add"));
+    addButton->setIcon(theme->getIcon(u"qbf-add@inverse"_s));
+    addButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    addButton->setPopupMode(QToolButton::MenuButtonPopup);
+    addButton->setCursor(Qt::PointingHandCursor);
+    addButton->setToolTip(tr("Add a torrent file. Use the arrow for a magnet link or to create a torrent."));
+    auto *addMenu = new QMenu(addButton);
+    addMenu->addAction(m_ui->actionOpen);
+    addMenu->addAction(m_ui->actionDownloadFromURL);
+    addMenu->addSeparator();
+    addMenu->addAction(m_ui->actionCreateTorrent);
+    addButton->setMenu(addMenu);
+    connect(addButton, &QToolButton::clicked, m_ui->actionOpen, &QAction::trigger);
+    auto *addButtonHolder = new QWidget(header);
+    auto *addButtonLayout = new QHBoxLayout(addButtonHolder);
+    addButtonLayout->setContentsMargins(10, 0, 6, 0);
+    addButtonLayout->addWidget(addButton);
+    header->addWidget(addButtonHolder);
+
+    header->addAction(m_ui->actionUseAlternativeSpeedLimits);
+    header->addAction(m_ui->actionLock);
+    header->addAction(m_ui->actionOptions);
+
+    auto *menuButton = new QToolButton(header);
+    menuButton->setObjectName(u"qbfMenuButton"_s);
+    menuButton->setIcon(theme->getIcon(u"qbf-menu"_s));
+    menuButton->setToolTip(tr("Menu"));
+    menuButton->setPopupMode(QToolButton::InstantPopup);
+    auto *mainMenu = new QMenu(menuButton);
+    mainMenu->addMenu(m_ui->menuFile);
+    mainMenu->addMenu(m_ui->menuEdit);
+    mainMenu->addMenu(m_ui->menuView);
+    mainMenu->addMenu(m_ui->menuOptions);
+#ifdef ENABLE_PLUGINS
+    mainMenu->addMenu(m_ui->menuPlugins);
+#endif
+    mainMenu->addMenu(m_ui->menuHelp);
+    menuButton->setMenu(mainMenu);
+    header->addWidget(menuButton);
+
+    // The header replaces the classic toolbar; hiding it would remove navigation and search.
+    m_ui->actionTopToolBar->setVisible(false);
+
+    // ---- Transfers page: an action bar for the selected torrents sits right above the list
+    auto *actionBar = new QToolBar(this);
+    actionBar->setProperty("qbfActionBar", true);
+    actionBar->setIconSize({16, 16});
+    actionBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    for (QAction *action : {m_ui->actionStart, m_ui->actionStop, m_ui->actionDelete})
+    {
+        actionBar->addAction(action);
+        if (auto *button = qobject_cast<QToolButton *>(actionBar->widgetForAction(action)))
+            button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    }
+    m_queueSeparator = actionBar->addSeparator();
+    actionBar->addAction(m_ui->actionTopQueuePos);
+    actionBar->addAction(m_ui->actionIncreaseQueuePos);
+    actionBar->addAction(m_ui->actionDecreaseQueuePos);
+    actionBar->addAction(m_ui->actionBottomQueuePos);
+    actionBar->addSeparator();
+    actionBar->addAction(m_ui->actionOpenDestinationFolder);
+
+    auto *actionBarSpacer = new QWidget(actionBar);
+    actionBarSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    actionBar->addWidget(actionBarSpacer);
+
+    m_selectionSummary = new QLabel(actionBar);
+    m_selectionSummary->setObjectName(u"qbfSelectionSummary"_s);
+    actionBar->addWidget(m_selectionSummary);
+
+    m_ui->actionShowFiltersSidebar->setIcon(theme->getIcon(u"qbf-sidebar"_s));
+    m_ui->actionShowFiltersSidebar->setToolTip(tr("Show or hide the filters sidebar"));
+    actionBar->addAction(m_ui->actionShowFiltersSidebar);
+
+    // Flat split layout: sidebar, list and details share one surface and are separated by hairlines.
+    auto *listPage = new QWidget;   // parentless: QSplitter::replaceWidget() refuses its own children
+    listPage->setObjectName(u"qbfListPage"_s);
+    listPage->setAttribute(Qt::WA_StyledBackground);
+    m_propertiesWidget->setAttribute(Qt::WA_StyledBackground);
+    m_ui->centralWidgetLayout->setContentsMargins(0, 0, 0, 0);
+    transferSplitter->setHandleWidth(1);
+    m_splitter->setHandleWidth(1);
+    auto *listPageLayout = new QVBoxLayout(listPage);
+    listPageLayout->setContentsMargins(0, 0, 0, 0);
+    listPageLayout->setSpacing(0);
+    transferSplitter->replaceWidget(0, listPage);   // un-parents the list; it is re-added just below
+    listPageLayout->addWidget(actionBar);
+    listPageLayout->addWidget(m_transferListWidget);
+    m_transferListWidget->show();
+
+    connect(m_transferListWidget->selectionModel(), &QItemSelectionModel::selectionChanged
+        , this, &MainWindow::updateSelectionSummary);
+    const QAbstractItemModel *shownModel = m_transferListWidget->model();
+    connect(shownModel, &QAbstractItemModel::rowsInserted, this, &MainWindow::updateSelectionSummary);
+    connect(shownModel, &QAbstractItemModel::rowsRemoved, this, &MainWindow::updateSelectionSummary);
+    connect(shownModel, &QAbstractItemModel::modelReset, this, &MainWindow::updateSelectionSummary);
+    connect(shownModel, &QAbstractItemModel::layoutChanged, this, &MainWindow::updateSelectionSummary);
+
+    auto *emptyState = new Modern::EmptyState(m_transferListWidget, m_transferListWidget->getSourceModel());
+    emptyState->addPrimaryAction(m_ui->actionOpen, tr("Add torrent file"))->setIcon(theme->getIcon(u"qbf-add@inverse"_s));
+    emptyState->addSecondaryAction(m_ui->actionDownloadFromURL, tr("Paste magnet or link"));
+
+    refreshPageSwitcher();
+}
+
+void MainWindow::refreshPageSwitcher()
+{
+    if (!m_navTransfers)
+        return;
+
+    const QWidget *current = m_tabs->currentWidget();
+    const auto badgeOf = [this](const QWidget *page) -> QString
+    {
+        const int index = page ? m_tabs->indexOf(page) : -1;
+        if (index < 0)
+            return {};
+        const QString count = Modern::splitCount(m_tabs->tabText(index)).second;
+        return (count == u"0") ? QString() : count;
+    };
+
+    m_navTransfers->setChecked(current == m_splitter);
+    m_navTransfers->setBadge(badgeOf(m_splitter));
+    m_navSearch->setChecked(m_searchWidget && (current == m_searchWidget.data()));
+    m_navRSS->setChecked(m_rssWidget && (current == m_rssWidget.data()));
+    m_navRSS->setBadge(badgeOf(m_rssWidget));
+    m_navLog->setChecked(m_executionLog && (current == m_executionLog.data()));
+}
+
+void MainWindow::updateSelectionSummary()
+{
+    if (!m_selectionSummary)
+        return;
+
+    const int total = m_transferListWidget->getSourceModel()->rowCount();
+    const int shown = m_transferListWidget->model()->rowCount();
+    const int selected = m_transferListWidget->selectionModel()->selectedRows().size();
+
+    QString text;
+    if (selected > 0)
+        text = tr("%1 of %2 selected").arg(selected).arg(shown);
+    else if (shown != total)
+        text = tr("Showing %1 of %2").arg(shown).arg(total);
+    else if (total == 1)
+        text = tr("1 torrent");
+    else
+        text = tr("%1 torrents").arg(total);
+    m_selectionSummary->setText(text);
+}
+
 bool MainWindow::isExecutionLogEnabled() const
 {
     return m_storeExecutionLogEnabled;
@@ -593,7 +862,7 @@ void MainWindow::setTitleSuffix(const QString &suffix)
 {
     const auto emDash = QChar(0x2014);
     const QString separator = u' ' + emDash + u' ';
-    m_windowTitle = QStringLiteral("qBittorrent " QBT_VERSION)
+    m_windowTitle = u"qBitFusion"_s
         + (!suffix.isEmpty() ? (separator + suffix) : QString());
 
     refreshWindowTitle();
@@ -736,6 +1005,7 @@ void MainWindow::on_actionLock_triggered()
 void MainWindow::handleRSSUnreadCountUpdated(int count)
 {
     m_tabs->setTabText(m_tabs->indexOf(m_rssWidget), tr("RSS (%1)").arg(count));
+    static_cast<HidableTabWidget *>(m_tabs.data())->notifyTabsChanged();
 }
 
 void MainWindow::displayRSSTab(bool enable)
@@ -832,6 +1102,8 @@ void MainWindow::toggleFocusBetweenLineEdits()
 void MainWindow::updateNbTorrents()
 {
     m_tabs->setTabText(0, tr("Transfers (%1)").arg(m_transferListWidget->getSourceModel()->rowCount()));
+    static_cast<HidableTabWidget *>(m_tabs.data())->notifyTabsChanged();
+    updateSelectionSummary();
 }
 
 void MainWindow::on_actionDocumentation_triggered() const
@@ -847,10 +1119,12 @@ void MainWindow::tabChanged([[maybe_unused]] const int newTab)
     {
         qDebug("Changed tab to transfer list, refreshing the list");
         m_propertiesWidget->loadDynamicData();
-        m_columnFilterAction->setVisible(true);
+        if (m_columnFilterAction)   // the modern shell creates it after the first page is added
+            m_columnFilterAction->setVisible(true);
         return;
     }
-    m_columnFilterAction->setVisible(false);
+    if (m_columnFilterAction)
+        m_columnFilterAction->setVisible(false);
 
     if (m_tabs->currentWidget() == m_searchWidget)
     {
@@ -1090,7 +1364,7 @@ void MainWindow::notifyOfUpdate(const QString &)
 {
     // Show restart message
     m_statusBar->showRestartRequired();
-    LogMsg(tr("qBittorrent was just updated and needs to be restarted for the changes to be effective.")
+    LogMsg(tr("qBitFusion was just updated and needs to be restarted for the changes to be effective.")
                                    , Log::CRITICAL);
     // Delete the executable watcher
     delete m_executableWatcher;
@@ -1226,7 +1500,7 @@ void MainWindow::closeEvent(QCloseEvent *e)
         QMetaObject::invokeMethod(this, &QWidget::hide, Qt::QueuedConnection);
         if (!pref->closeToTrayNotified())
         {
-            app()->desktopIntegration()->showNotification(tr("qBittorrent is closed to tray"), tr("This behavior can be changed in the settings. You won't be reminded again."));
+            app()->desktopIntegration()->showNotification(tr("qBitFusion is closed to tray"), tr("This behavior can be changed in the settings. You won't be reminded again."));
             pref->setCloseToTrayNotified(true);
         }
         return;
@@ -1244,9 +1518,9 @@ void MainWindow::closeEvent(QCloseEvent *e)
         {
             if (!isVisible())
                 show();
-            QMessageBox confirmBox(QMessageBox::Question, tr("Exiting qBittorrent"),
+            QMessageBox confirmBox(QMessageBox::Question, tr("Exiting qBitFusion"),
                                    // Split it because the last sentence is used in the WebUI
-                                   tr("Some files are currently transferring.") + u'\n' + tr("Are you sure you want to quit qBittorrent?"),
+                                   tr("Some files are currently transferring.") + u'\n' + tr("Are you sure you want to quit qBitFusion?"),
                                    QMessageBox::NoButton, this);
             QPushButton *noBtn = confirmBox.addButton(tr("&No"), QMessageBox::NoRole);
             confirmBox.addButton(tr("&Yes"), QMessageBox::YesRole);
@@ -1319,7 +1593,7 @@ bool MainWindow::event(QEvent *e)
                     QMetaObject::invokeMethod(this, &QWidget::hide, Qt::QueuedConnection);
                     if (!pref->minimizeToTrayNotified())
                     {
-                        app()->desktopIntegration()->showNotification(tr("qBittorrent is minimized to tray"), tr("This behavior can be changed in the settings. You won't be reminded again."));
+                        app()->desktopIntegration()->showNotification(tr("qBitFusion is minimized to tray"), tr("This behavior can be changed in the settings. You won't be reminded again."));
                         pref->setMinimizeToTrayNotified(true);
                     }
                     return true;
@@ -1405,6 +1679,11 @@ void MainWindow::showFiltersSidebar(const bool show)
     if (show && !m_transferListFiltersWidget)
     {
         m_transferListFiltersWidget = new TransferListFiltersWidget(m_splitter, m_transferListWidget, isDownloadTrackerFavicon());
+        if (ModernAppearance::isActive())
+        {
+            Modern::styleSidebarViews(m_transferListFiltersWidget);
+            m_transferListFiltersWidget->setMinimumWidth(190);
+        }
         m_splitter->insertWidget(0, m_transferListFiltersWidget);
         m_splitter->setCollapsible(0, true);
         // From https://doc.qt.io/qt-5/qsplitter.html#setSizes:
@@ -1427,7 +1706,7 @@ void MainWindow::loadPreferences()
     const Preferences *pref = Preferences::instance();
 
     // General
-    if (pref->isToolbarDisplayed())
+    if (pref->isToolbarDisplayed() || ModernAppearance::isActive())
     {
         m_ui->toolBar->setVisible(true);
     }
@@ -1579,6 +1858,13 @@ void MainWindow::populateDesktopIntegrationMenu()
 void MainWindow::updateAltSpeedsBtn(const bool alternative)
 {
     m_ui->actionUseAlternativeSpeedLimits->setChecked(alternative);
+    if (ModernAppearance::isActive())
+    {
+        m_ui->actionUseAlternativeSpeedLimits->setIcon(UIThemeManager::instance()->getIcon(alternative ? u"slow"_s : u"slow_off"_s));
+        m_ui->actionUseAlternativeSpeedLimits->setToolTip(alternative
+            ? tr("Alternative speed limits are on. Click to use the global speed limits.")
+            : tr("Alternative speed limits are off. Click to switch to the alternative limits."));
+    }
 }
 
 PropertiesWidget *MainWindow::propertiesWidget() const
@@ -1741,7 +2027,7 @@ void MainWindow::handleUpdateCheckFinished(ProgramUpdater *updater, const bool i
     {
         if (invokedByUser)
         {
-            auto *msgBox = new QMessageBox {QMessageBox::Information, u"qBittorrent"_s
+            auto *msgBox = new QMessageBox {QMessageBox::Information, u"qBitFusion"_s
                 , tr("No updates available.\nYou are already using the latest version.")
                 , QMessageBox::Ok, this};
             msgBox->setAttribute(Qt::WA_DeleteOnClose);
@@ -1934,6 +2220,10 @@ void MainWindow::refreshTrayIconTooltip()
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 void MainWindow::checkProgramUpdate(const bool invokedByUser)
 {
+    // qBitFusion has no update feed. Upstream's would offer stock qBittorrent and replace this build.
+    if (ProgramUpdater::isDisabledForThisBuild())
+        return;
+
     if (m_programUpdateTimer)
         m_programUpdateTimer->stop();
 

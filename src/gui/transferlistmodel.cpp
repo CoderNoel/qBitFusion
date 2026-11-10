@@ -44,6 +44,7 @@
 #include "base/utils/misc.h"
 #include "base/utils/string.h"
 #include "hybrid/hybridwidgets.h"
+#include "modern/modernappearance.h"
 #include "uithememanager.h"
 
 using namespace Qt::Literals::StringLiterals;
@@ -564,7 +565,8 @@ QVariant TransferListModel::data(const QModelIndex &index, const int role) const
     switch (role)
     {
     case Qt::ForegroundRole:
-        if (m_useTorrentStatesColors)
+        // The modern look keeps rows in the normal text colour and tints only the Status cell.
+        if (m_useTorrentStatesColors && (!ModernAppearance::isActive() || (index.column() == TR_STATUS)))
             return m_stateThemeColors.value(torrent->state());
         break;
     case Qt::DisplayRole:

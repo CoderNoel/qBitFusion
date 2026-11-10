@@ -30,6 +30,12 @@
 
 #include <limits>
 
+#include <QRegularExpression>
+
+#include "base/global.h"
+
+using namespace Qt::Literals::StringLiterals;
+
 namespace
 {
     // Parses a non-empty run of ASCII digits into a non-negative qint64 without overflow.
@@ -104,6 +110,29 @@ std::optional<qint64> Hybrid::parseRetryAfterSeconds(const QByteArrayView header
         return std::nullopt;
     // Clamp absurd values; a day is plenty for backoff purposes.
     return std::min<qint64>(*seconds, 24 * 60 * 60);
+}
+
+QString Hybrid::summarizeErrorPage(const QByteArray &body)
+{
+    QString text = QString::fromLatin1(body.left(8192));
+
+    static const QRegularExpression blocks {u"<(script|style|head)\\b.*?</\\1\\s*>"_s
+            , (QRegularExpression::CaseInsensitiveOption | QRegularExpression::DotMatchesEverythingOption)};
+    static const QRegularExpression tags {u"<[^>]*>"_s};
+    // Anything shaped like a URL, path, query string, e-mail, long identifier or IP address.
+    static const QRegularExpression risky {u"\\S*(?:[/\\\\@%=&?#]|\\d{1,3}(?:\\.\\d{1,3}){3}|[0-9A-Fa-f]*:[0-9A-Fa-f:]{2,}|[0-9A-Za-z_\\-]{16,})\\S*"_s};
+    text.remove(blocks);
+    text.replace(tags, u" "_s);
+    text.replace(risky, u"[…]"_s);
+
+    QString clean;
+    clean.reserve(text.size());
+    for (const QChar ch : asConst(text))
+        clean.append(((ch.unicode() >= 0x20) && (ch.unicode() < 0x7F)) || (ch == u'…') ? ch : u' ');
+    clean = clean.simplified();
+    if (clean.size() > 200)
+        clean = clean.left(200) + u'…';
+    return clean;
 }
 
 Hybrid::RangeVerdict Hybrid::validateRangeResponse(const RangeResponseHead &head, const ByteRange &requested, const qint64 expectedTotal)

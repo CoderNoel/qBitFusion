@@ -358,7 +358,7 @@
   </action>
   <action name="actionLock">
    <property name="text">
-    <string>L&amp;ock qBittorrent</string>
+    <string>L&amp;ock qBitFusion</string>
    </property>
    <property name="iconText">
     <string>Lock</string>
@@ -369,10 +369,10 @@
   </action>
   <action name="actionDonateMoney">
    <property name="text">
-    <string>Do&amp;nate!</string>
+    <string>Do&amp;nate to qBittorrent</string>
    </property>
    <property name="toolTip">
-    <string>If you like qBittorrent, please donate!</string>
+    <string>qBitFusion is built on qBittorrent. If you like it, please donate to the qBittorrent project!</string>
    </property>
   </action>
   <action name="actionAutoExit">
@@ -380,7 +380,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>&amp;Exit qBittorrent</string>
+    <string>&amp;Exit qBitFusion</string>
    </property>
   </action>
   <action name="actionAutoSuspend">

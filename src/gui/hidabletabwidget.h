@@ -36,13 +36,28 @@ class QPaintEvent;
 
 class HidableTabWidget final : public QTabWidget
 {
+    Q_OBJECT
+    Q_DISABLE_COPY_MOVE(HidableTabWidget)
+
 public:
     explicit HidableTabWidget(QWidget *parent = nullptr);
+
+    // The modern shell switches pages from its own navigation and never shows the tab bar.
+    void setTabBarAlwaysHidden(bool hidden);
+
+signals:
+    // A page was added or removed, or a page title changed (see notifyTabsChanged()).
+    void tabsChanged();
+
+public slots:
+    void notifyTabsChanged();
 
 private:
     void tabInserted(int index) override;
     void tabRemoved(int index) override;
     void tabsCountChanged();
+
+    bool m_tabBarAlwaysHidden = false;
 
 #ifdef Q_OS_MACOS
     void paintEvent(QPaintEvent *event) override;

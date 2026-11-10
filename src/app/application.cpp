@@ -322,6 +322,7 @@ Application::Application(int &argc, char **argv)
     setOrganizationDomain(u"qbittorrent.org"_s);
 #if !defined(DISABLE_GUI)
     setDesktopFileName(u"org.qbittorrent.qBittorrent"_s);
+    setApplicationDisplayName(u"qBitFusion"_s);
     setQuitOnLastWindowClosed(false);
     setQuitLockEnabled(false);
     QPixmapCache::setCacheLimit(PIXMAP_CACHE_SIZE);
@@ -363,7 +364,7 @@ Application::Application(int &argc, char **argv)
     connect(this, &QGuiApplication::commitDataRequest, this, &Application::shutdownCleanup, Qt::DirectConnection);
 #endif
 
-    LogMsg(tr("qBittorrent %1 started. Process ID: %2", "qBittorrent v3.2.0alpha started")
+    LogMsg(tr("qBitFusion %1 started. Process ID: %2", "qBittorrent v3.2.0alpha started")
         .arg(QStringLiteral(QBT_VERSION), QString::number(QCoreApplication::applicationPid())));
     if (portableModeEnabled)
     {
@@ -752,7 +753,7 @@ void Application::sendNotificationEmail(const BitTorrent::Torrent *torrent)
         + tr("Save path: %1").arg(torrent->savePath().toString()) + u"\n\n"
         + tr("The torrent was downloaded in %1.", "The torrent was downloaded in 1 hour and 20 seconds")
             .arg(Utils::Misc::userFriendlyDuration(torrent->activeTime())) + u"\n\n\n"
-        + tr("Thank you for using qBittorrent.") + u'\n';
+        + tr("Thank you for using qBitFusion.") + u'\n';
 
     // Send the notification email
     const Preferences *pref = Preferences::instance();
@@ -767,7 +768,7 @@ void Application::sendTestEmail()
     {
         // Prepare mail content
         const QString content = tr("This is a test email.") + u'\n'
-            + tr("Thank you for using qBittorrent.") + u'\n';
+            + tr("Thank you for using qBitFusion.") + u'\n';
 
         // Send the notification email
         Net::SMTPClient::sendMail(pref->getMailNotificationSender(), pref->getMailNotificationEmail()
@@ -916,6 +917,7 @@ int Application::exec()
 
 #ifndef DISABLE_GUI
     UIThemeManager::initInstance();
+    setWindowIcon(UIThemeManager::instance()->getIcon(u"qbittorrent"_s));
 
 #ifdef Q_OS_WIN
     installNativeEventFilter(new NativeEventFilter(UIThemeManager::instance(), this));
@@ -1041,7 +1043,7 @@ int Application::exec()
             const QString url = u"%1://%2:%3"_s.arg((m_webui->isHttps() ? u"https"_s : u"http"_s)
                     , (address.isEqual(QHostAddress::Any, QHostAddress::ConvertUnspecifiedAddress) ? u"localhost"_s : address.toString())
                     , QString::number(m_webui->port()));
-            printf("%s\n", qUtf8Printable(tr("To control qBittorrent, access the WebUI at: %1").arg(url)));
+            printf("%s\n", qUtf8Printable(tr("To control qBitFusion, access the WebUI at: %1").arg(url)));
 
             if (!tempPassword.isEmpty())
             {
@@ -1429,13 +1431,13 @@ void Application::cleanup()
     if (m_isCleanupRun.exchange(true, std::memory_order_acquire))
         return;
 
-    LogMsg(tr("qBittorrent termination initiated"));
+    LogMsg(tr("qBitFusion termination initiated"));
 
 #ifndef DISABLE_GUI
     if (m_desktopIntegration)
     {
         m_desktopIntegration->disconnect();
-        m_desktopIntegration->setToolTip(tr("qBittorrent is shutting down..."));
+        m_desktopIntegration->setToolTip(tr("qBitFusion is shutting down..."));
         if (m_desktopIntegration->menu())
             m_desktopIntegration->menu()->setEnabled(false);
     }
@@ -1505,7 +1507,7 @@ void Application::cleanup()
     SearchPluginManager::freeInstance();
     Utils::Fs::removeDirRecursively(Utils::Fs::tempPath());
 
-    LogMsg(tr("qBittorrent is now ready to exit"));
+    LogMsg(tr("qBitFusion is now ready to exit"));
     Logger::freeInstance();
     delete m_fileLogger;
 

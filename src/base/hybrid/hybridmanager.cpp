@@ -427,10 +427,32 @@ void Hybrid::HybridManager::ensureEntry(BitTorrent::Torrent *torrent)
         d.switchCount = switches;
         saveSidecar(id, d);
     });
-    connect(coordinator, &HybridCoordinator::transitioned, this, [](const TransportState from, const TransportState to, const Reason reason)
+    connect(coordinator, &HybridCoordinator::transitioned, this, [coordinator](const TransportState from, const TransportState to, const Reason reason)
     {
         // Structured, low-cardinality event: no names, hashes, URLs or tokens (spec 04).
         LogMsg(tr("Hybrid sources: %1 -> %2 (%3)").arg(wireName(from), wireName(to), wireName(reason)), Log::INFO);
+
+        // After a probe, say how much of the torrent the provider covers (counts only), so that a
+        // fallback to peers can be understood from the log.
+        const HybridStatus status = coordinator->status();
+        const bool leftProvider = (to != TransportState::HttpActive) && (to != TransportState::HttpReady) && (to != TransportState::Completed)
+                && (to != TransportState::ProbingProvider) && (to != TransportState::RecoveryProbing);
+        if (leftProvider && !status.failureDetail.isEmpty())
+            LogMsg(tr("Hybrid sources: provider not used. Detail: %1").arg(status.failureDetail), Log::WARNING);
+
+        if ((from != TransportState::ProbingProvider) && (from != TransportState::RecoveryProbing))
+            return;
+        if (!status.matchFailure.isEmpty())
+        {
+            LogMsg(tr("Hybrid sources: provider files were not matched (%1). Torrent files: %2, provider files: %3")
+                    .arg(status.matchFailure, QString::number(status.torrentFileCount), QString::number(status.providerFileCount)), Log::WARNING);
+        }
+        else if (status.providerFileCount > 0)
+        {
+            LogMsg(tr("Hybrid sources: provider has %1 of %2 files; missing pieces: %3 from provider, %4 need peers")
+                    .arg(QString::number(status.boundFileCount), QString::number(status.torrentFileCount)
+                        , QString::number(status.providerPieces), QString::number(status.peerOnlyPieces)), Log::INFO);
+        }
     });
 
     m_entries.insert(id, std::move(entry));

@@ -47,6 +47,7 @@ namespace Hybrid
         ProviderNeedsUser,       // auth / forbidden / mismatch: no automatic retry
         HttpOutage,              // circuit opened while HTTP active
         HttpJobsSettled,         // in-flight HTTP cancelled, submitted pieces resolved
+        HttpExhausted,           // provider supplied all it can; the rest needs bytes it does not expose
         RecoveryDue,             // backoff elapsed while P2P active
         RecoveryProbeOk,         // provider revalidated
         RecoveryProbeFailed,

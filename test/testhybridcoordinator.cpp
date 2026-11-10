@@ -30,6 +30,7 @@
 // Phase P3/P4 evidence: provider bytes reach disk only through add_piece + libtorrent hashing,
 // failover preserves verified pieces, and held torrents make zero swarm contact.
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -416,6 +417,27 @@ private:
         return true;
     }
 
+    // Removes the torrent's first file from what the provider exposes, as when only some files
+    // of a torrent were selected on the debrid service. Returns its native index.
+    static int hideFirstProviderFile(Rig &r)
+    {
+        const int hidden = r.provider.files.first().providerFileId.toInt();
+        r.provider.files.removeFirst();
+        return hidden;
+    }
+
+    static int piecesNotTouching(const Rig &r, const int nativeIndex)
+    {
+        int count = 0;
+        for (int p = 0; p < r.sink.info->num_pieces(); ++p)
+        {
+            const QList<PieceSlice> slices = nativePieceSlices(*r.sink.info, p);
+            if (std::none_of(slices.cbegin(), slices.cend(), [nativeIndex](const PieceSlice &s) { return s.nativeFileIndex == nativeIndex; }))
+                ++count;
+        }
+        return count;
+    }
+
 private slots:
     void initTestCase()
     {
@@ -515,6 +537,97 @@ private slots:
         r.coord->setPolicy(TransportPolicy::DebridPreferred, true);
         QCOMPARE(r.coord->state(), TransportState::P2PActive);
         QCOMPARE(r.sink.releases, 1);
+    }
+
+    void partialProviderCoverageUsesProviderThenPeers()
+    {
+        // Regression (live report): a torrent whose first file is not on the provider used to be
+        // rejected whole ("unmatched torrent files") and downloaded from peers only. The provider
+        // must supply every piece it has in full; only the others go to peers. The hidden file
+        // spans more pieces than there are HTTP slots, which used to starve the picker.
+        Rig r;
+        build(r, lt::create_torrent::v1_only, fastConfig());
+        const int hidden = hideFirstProviderFile(r);
+        const int n = r.sink.info->num_pieces();
+        const int fromProvider = piecesNotTouching(r, hidden);
+        QVERIFY(fromProvider > 0);
+        QVERIFY((n - fromProvider) > fastConfig().maxPiecesInFlight);
+
+        r.coord->start(TransportPolicy::DebridPreferred, true);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::P2PActive, 20000);
+        QCOMPARE(r.coord->status().lastReason, Reason::ProviderLacksPieces);
+        QCOMPARE(r.coord->status().httpVerifiedPieces, fromProvider);
+        QCOMPARE(r.coord->status().providerPieces, fromProvider);
+        QCOMPARE(r.coord->status().peerOnlyPieces, n - fromProvider);
+        QCOMPARE(r.coord->status().boundFileCount, r.coord->status().torrentFileCount - 1);
+        QVERIFY(!r.coord->wantsTransportHold());
+        QCOMPARE(r.hashFailures, 0);
+
+        // Every piece the provider could not supply is still missing, and nothing else is.
+        const QBitArray haveAtSwitch = r.sink.havePieces();
+        QCOMPARE(haveAtSwitch.count(true), fromProvider);
+        qint64 missingBytes = 0;
+        for (int p = 0; p < n; ++p)
+            missingBytes += haveAtSwitch.testBit(p) ? 0 : r.sink.info->piece_size(lt::piece_index_t {p});
+
+        // The provider has nothing more to give: no probing back and forth while peers work.
+        QTest::qWait(1200);
+        QCOMPARE(r.coord->state(), TransportState::P2PActive);
+        QCOMPARE(r.provider.manifestCalls, 1);
+        QCOMPARE(r.coord->status().switchCount, quint64 {1});
+
+        const qint64 payloadAtSwitch = r.sink.handle.status({}).total_payload_download;
+        lt::session seedSes {isolated()};
+        lt::add_torrent_params seedAtp;
+        seedAtp.ti = std::make_shared<lt::torrent_info>(*r.sink.info);
+        seedAtp.save_path = r.src.string();
+        seedAtp.flags |= lt::torrent_flags::seed_mode;
+        seedSes.add_torrent(seedAtp);
+        QTRY_VERIFY_WITH_TIMEOUT(seedSes.listen_port() != 0, 5000);
+        r.sink.handle.connect_peer({boost::asio::ip::make_address("127.0.0.1"), static_cast<unsigned short>(seedSes.listen_port())});
+
+        QTRY_VERIFY_WITH_TIMEOUT(r.finished, 30000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::Completed, 5000);
+        QVERIFY(outputMatches(r));
+        const qint64 p2pBytes = r.sink.handle.status({}).total_payload_download - payloadAtSwitch;
+        QVERIFY2(p2pBytes <= (missingBytes + PIECE), qPrintable(u"p2p=%1 missing=%2"_s.arg(p2pBytes).arg(missingBytes)));
+        QCOMPARE(r.coord->status().httpVerifiedPieces, fromProvider);
+        QCOMPARE(r.coord->ownership().collisions(), 0);
+    }
+
+    void partialProviderCoverageDebridOnlyStopsWithoutSwarm()
+    {
+        // Same layout under debrid-only: take what the provider has, then stop and say why.
+        // Peers are never contacted and the provider is not polled in a loop.
+        Rig r;
+        build(r, lt::create_torrent::v1_only, fastConfig());
+        const int hidden = hideFirstProviderFile(r);
+        const int fromProvider = piecesNotTouching(r, hidden);
+
+        r.coord->start(TransportPolicy::DebridOnly, true /* must be ignored */);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::WaitingForUser, 20000);
+        QCOMPARE(r.coord->status().lastReason, Reason::ProviderLacksPieces);
+        QCOMPARE(r.coord->status().httpVerifiedPieces, fromProvider);
+        QCOMPARE(r.sink.havePieces().count(true), fromProvider);
+
+        QTest::qWait(1200);
+        QCOMPARE(r.coord->state(), TransportState::WaitingForUser);
+        QCOMPARE(r.provider.manifestCalls, 1);
+
+        // Asking again finds nothing usable for what is missing and stops at once.
+        r.coord->notifyUserStarted();
+        QTRY_COMPARE_WITH_TIMEOUT(r.provider.manifestCalls, 2, 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::WaitingForUser, 5000);
+        QCOMPARE(r.coord->status().lastReason, Reason::ProviderLacksPieces);
+        QCOMPARE(r.coord->status().providerPieces, 0);
+        QVERIFY(r.coord->status().peerOnlyPieces > 0);
+
+        QVERIFY(!r.finished);
+        QVERIFY(r.coord->wantsTransportHold());
+        QCOMPARE(r.sink.releases, 0);
+        QCOMPARE(r.tracker.connections, 0);
+        QCOMPARE(r.peer.connections, 0);
+        QCOMPARE(r.hashFailures, 0);
     }
 
     void outageFallsBackToP2PWithoutRedownload()

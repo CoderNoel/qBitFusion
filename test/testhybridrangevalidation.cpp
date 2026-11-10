@@ -43,6 +43,26 @@ public:
     TestHybridRangeValidation() = default;
 
 private slots:
+    void errorPageSummaryIsRedacted() const
+    {
+        // The summary goes to the log: nothing shaped like a link, path, token or address survives.
+        const QByteArray page = "<html><head><title>503</title><style>b{color:red}</style></head><body>"
+                "<h1>Service  Unavailable</h1>\n<p>Too many connections for "
+                "https://cdn.example.com/d/ABCDEFGHIJKLMNOP/file.mkv?sig=SECRETSECRETSECRET from 203.0.113.7"
+                " token 0123456789abcdefABCDEF path /d/abc user a@b.c ipv6 2001:db8::1</p>"
+                "<script>var t='SECRETSECRETSECRET';</script></body></html>";
+        const QString summary = summarizeErrorPage(page);
+        QVERIFY2(summary.startsWith(u"Service Unavailable Too many connections for"), qPrintable(summary));
+        for (const char *secret : {"SECRET", "ABCDEFGHIJKLMNOP", "cdn.example.com", "203.0.113.7", "0123456789abcdef", "/d/", "a@b.c", "2001", "color", "var "})
+            QVERIFY2(!summary.contains(QLatin1StringView(secret)), secret);
+        QVERIFY(summary.size() <= 201);
+
+        QCOMPARE(summarizeErrorPage({}), QString());
+        QCOMPARE(summarizeErrorPage(QByteArray("<html><body>") + char(1) + char(2) + "</body></html>"), QString());
+        QVERIFY(summarizeErrorPage(QByteArray(100'000, 'a')).size() <= 201);   // long identifier: replaced
+        QVERIFY(summarizeErrorPage(QByteArray(5000, ' ') + QByteArray("word ").repeated(500)).size() <= 201);
+    }
+
     void parseValid() const
     {
         QCOMPARE(parseContentRange("bytes 0-0/1"), (ContentRange {0, 0, 1}));

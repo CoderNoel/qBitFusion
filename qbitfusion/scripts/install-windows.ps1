@@ -5,7 +5,7 @@
   Settings > Apps so it can be removed like any other app. No administrator rights needed.
 
 .DESCRIPTION
-  The installed copy runs in portable mode (a "profile" folder next to qbittorrent.exe), so it
+  The installed copy runs in portable mode (a "profile" folder next to qbitfusion.exe), so it
   never reads or changes a stock qBittorrent profile in %APPDATA%\qBittorrent and can run side by
   side with stock qBittorrent. Reinstalling keeps that profile. File associations for .torrent and
   magnet links are not touched.
@@ -31,11 +31,12 @@ $appName = "qBitFusion"
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$appName"
 $startMenuLink = Join-Path ([Environment]::GetFolderPath("Programs")) "$appName.lnk"
 $desktopLink = Join-Path ([Environment]::GetFolderPath("Desktop")) "$appName.lnk"
-$exe = Join-Path $InstallDir "qbittorrent.exe"
+$exe = Join-Path $InstallDir "qbitfusion.exe"
+$icon = Join-Path $InstallDir "qbitfusion.ico"
 $profileDir = Join-Path $InstallDir "profile"
 
 function Assert-NotRunning {
-    $running = Get-Process qbittorrent -ErrorAction SilentlyContinue |
+    $running = Get-Process qbitfusion, qbittorrent -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -and $_.Path.StartsWith($InstallDir, [StringComparison]::OrdinalIgnoreCase) }
     if ($running) {
         throw "$appName is running from $InstallDir (PID $($running.Id -join ', ')). Quit it first (File > Exit)."
@@ -62,7 +63,7 @@ $build = Join-Path $repo $BuildDir
 if (-not $NoBuild) {
     & (Join-Path $PSScriptRoot "build-windows.ps1") -Release -BuildDir $BuildDir
 }
-$builtExe = Join-Path $build "qbittorrent.exe"
+$builtExe = Join-Path $build "qbitfusion.exe"
 if (-not (Test-Path $builtExe)) { throw "No Release build at $builtExe. Run without -NoBuild." }
 
 Assert-NotRunning
@@ -72,9 +73,10 @@ $stage = Join-Path $build "install-stage"
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $stage | Out-Null
 Copy-Item $builtExe $stage
+Copy-Item (Join-Path $repo "src/gui/modern/brand/qbitfusion.ico") $stage
 
 & (Join-Path $tc.qt "bin\windeployqt.exe") --release --no-translations --no-system-d3d-compiler `
-    --no-opengl-sw --no-quick-import --dir $stage (Join-Path $stage "qbittorrent.exe") | Out-Null
+    --no-opengl-sw --no-quick-import --dir $stage (Join-Path $stage "qbitfusion.exe") | Out-Null
 
 # The app links the MSVC runtime dynamically; ship it app-local so no redistributable install is needed.
 $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
@@ -97,7 +99,7 @@ foreach ($path in $links) {
     $lnk = $shell.CreateShortcut($path)
     $lnk.TargetPath = $exe
     $lnk.WorkingDirectory = $InstallDir
-    $lnk.IconLocation = "$exe,0"
+    $lnk.IconLocation = "$icon,0"
     $lnk.Description = "qBitFusion: qBittorrent with debrid-assisted downloads"
     $lnk.Save()
 }
@@ -113,7 +115,7 @@ $values = @{
     DisplayName     = $appName
     DisplayVersion  = $version
     Publisher       = "qBitFusion contributors"
-    DisplayIcon     = "$exe,0"
+    DisplayIcon     = "$icon,0"
     InstallLocation = $InstallDir
     UninstallString = "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File `"$selfCopy`" -Uninstall"
 }
@@ -121,6 +123,21 @@ foreach ($name in $values.Keys) { Set-ItemProperty $uninstallKey $name $values[$
 Set-ItemProperty $uninstallKey EstimatedSize $size -Type DWord
 Set-ItemProperty $uninstallKey NoModify 1 -Type DWord
 Set-ItemProperty $uninstallKey NoRepair 1 -Type DWord
+
+# Tell Explorer/Search about the replaced assets and shortcuts without deleting its icon
+# cache or restarting the user's desktop. The EXE also carries the same multi-size icon.
+if (-not ("QbfShellIcons" -as [type])) {
+    Add-Type @'
+using System.Runtime.InteropServices;
+public static class QbfShellIcons {
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern void SHChangeNotify(uint eventId, uint flags, string item1, string item2);
+}
+'@
+}
+foreach ($changedPath in @($exe, $icon) + $links) {
+    [QbfShellIcons]::SHChangeNotify(0x00002000, 0x0005, $changedPath, $null)
+}
 
 Write-Host "$appName $version installed to $InstallDir"
 Write-Host "Profile (settings, torrents, logs): $profileDir"

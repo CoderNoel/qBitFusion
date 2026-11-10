@@ -130,9 +130,18 @@ namespace
         }
     }
 
+    constexpr qint64 PREFLIGHT_BYTES = 1024;
+
     bool isPermanent(const Hybrid::FailureCategory category)
     {
         return (category == Hybrid::FailureCategory::Auth) || (category == Hybrid::FailureCategory::Permission);
+    }
+
+    // RangeError::detail is already redacted (scheme and host only). Adds what the validator saw.
+    QString describeRangeError(const Hybrid::RangeError &error)
+    {
+        return u"%1 [HTTP %2, check %3]"_s.arg((error.detail.isEmpty() ? u"range request failed"_s : error.detail)
+                , QString::number(error.httpStatus), QString::number(static_cast<int>(error.verdict)));
     }
 }
 
@@ -402,8 +411,7 @@ void Hybrid::HybridCoordinator::enterState(const Transition &transition)
 
     case S::P2PActive:
         abortHttp();
-        if (!m_health.needsUser() && m_provider && (m_provider->accountState() == AccountState::Connected))
-            armTimer(std::max(m_health.nextProbeAtMs(), m_clock() + m_config.health.minDwellMs), MachineEvent::RecoveryDue);
+        armRecoveryProbe();
         break;
 
     case S::RecoveryProbing:
@@ -460,6 +468,14 @@ void Hybrid::HybridCoordinator::probe(const bool recovery)
         return;
     }
 
+    m_status.torrentFileCount = 0;
+    m_status.providerFileCount = 0;
+    m_status.boundFileCount = 0;
+    m_status.providerPieces = 0;
+    m_status.peerOnlyPieces = 0;
+    m_status.matchFailure.clear();
+    m_status.failureDetail.clear();
+
     const quint64 epoch = m_epoch;
     m_provider->resolveManifest(m_sink->identity(), m_config.allowRemoteCreate, this
             , [this, epoch, recovery](const ProviderResult<ProviderManifest> &result)
@@ -469,6 +485,7 @@ void Hybrid::HybridCoordinator::probe(const bool recovery)
 
         if (!result)
         {
+            m_status.failureDetail = result.error().message;
             onProbeResult(false, recovery, result.error().category, reasonFor(result.error().category), result.error().retryAfterSeconds);
             return;
         }
@@ -483,25 +500,37 @@ void Hybrid::HybridCoordinator::probe(const bool recovery)
             return;
         }
 
-        const auto binding = bindFiles(m_sink->nativeFiles(), m_manifest.files);
+        const QList<TorrentFileEntry> nativeFiles = m_sink->nativeFiles();
+        m_status.torrentFileCount = static_cast<int>(std::count_if(nativeFiles.cbegin(), nativeFiles.cend()
+                , [](const TorrentFileEntry &file) { return !file.isPad; }));
+        m_status.providerFileCount = static_cast<int>(m_manifest.files.size());
+
+        const auto binding = bindFiles(nativeFiles, m_manifest.files);
         if (!binding)
         {
             // Wrong layout is a hard, non-retriable signal: never guess (ADR-005).
             m_bound = false;
+            m_status.matchFailure = describe(binding.error().error);
             onProbeResult(false, recovery, FailureCategory::Permission, Reason::UnmatchedTorrentFiles, std::nullopt);
             return;
         }
         m_binding = binding.value();
         m_bound = true;
+        m_status.boundFileCount = static_cast<int>(m_binding.byNativeIndex.size());
+        rebuildPieceCoverage();
 
-        // MVP fails closed: every wanted piece must be fully bound (no T05 boundary guessing).
+        // Coverage is decided per piece (ADR-009, qbitfusion/DECISIONS.md). A piece goes over HTTP
+        // only if the provider exposes every byte of it; a piece touching a file it does not expose (for
+        // example a small text file sharing a piece with a large video) is left to peers. Such
+        // pieces must never keep the provider from supplying everything else.
         for (const int piece : m_sink->wantedMissingPieces())
+            ++(isPieceBound(piece) ? m_status.providerPieces : m_status.peerOnlyPieces);
+
+        if ((m_status.providerPieces == 0) && (m_status.peerOnlyPieces > 0))
         {
-            if (!isPieceBound(piece))
-            {
-                onProbeResult(false, recovery, FailureCategory::Permission, Reason::UnmatchedTorrentFiles, std::nullopt);
-                return;
-            }
+            // The provider has nothing usable for what is still missing. Not retriable.
+            onProbeResult(false, recovery, FailureCategory::Permission, Reason::ProviderLacksPieces, std::nullopt);
+            return;
         }
 
         preflight(recovery);
@@ -510,8 +539,10 @@ void Hybrid::HybridCoordinator::probe(const bool recovery)
 
 void Hybrid::HybridCoordinator::preflight(const bool recovery)
 {
-    // Range preflight on one bound file: bytes=0-0 must yield 206 + exact Content-Range total.
-    // HEAD alone is insufficient (spec 03 section 4 step 5).
+    // Range preflight on one bound file: a small range must yield 206 + exact Content-Range and
+    // total. HEAD alone is insufficient (spec 03 section 4 step 5). The range is the first KiB, not
+    // a single byte: live Real-Debrid download servers were seen to answer "bytes=0-0" with a 206
+    // whose Content-Length did not match, while piece requests never end at offset 0.
     if (m_binding.byNativeIndex.isEmpty())
     {
         onProbeResult(true, recovery, FailureCategory::None, Reason::ProviderReady, std::nullopt);
@@ -526,12 +557,16 @@ void Hybrid::HybridCoordinator::preflight(const bool recovery)
             return;
         if (!ok)
         {
-            onProbeResult(false, recovery, error.category, reasonFor(error.category), error.retryAfterSeconds);
+            // A link that cannot be resolved is not evidence about byte ranges: report it as what
+            // it is, so the log and the Source column do not point at the wrong cause.
+            m_status.failureDetail = error.message;
+            const Reason reason = (error.category == FailureCategory::BadResponse) ? Reason::ProviderOutage : reasonFor(error.category);
+            onProbeResult(false, recovery, error.category, reason, error.retryAfterSeconds);
             return;
         }
 
         const TemporaryLink link = m_links.value(fileIndex);
-        RangeRequest request {link.url, {0, 0}, link.fileSize, m_config.timeouts};
+        RangeRequest request {link.url, {0, std::min<qint64>(link.fileSize, PREFLIGHT_BYTES) - 1}, link.fileSize, m_config.timeouts};
         auto *fetch = new RangeFetch(m_network, request, m_provider->dataUrlPolicy(), nullptr, m_clock, this);
         connect(fetch, &RangeFetch::succeeded, this, [this, fetch, epoch, recovery]
         {
@@ -539,11 +574,15 @@ void Hybrid::HybridCoordinator::preflight(const bool recovery)
             if (epoch == m_epoch)
                 onProbeResult(true, recovery, FailureCategory::None, Reason::ProviderReady, std::nullopt);
         });
-        connect(fetch, &RangeFetch::failed, this, [this, fetch, epoch, recovery](const RangeError &rangeError)
+        connect(fetch, &RangeFetch::failed, this, [this, fetch, epoch, recovery, fileIndex](const RangeError &rangeError)
         {
             fetch->deleteLater();
             if (epoch != m_epoch)
                 return;
+            // The next attempt asks the provider for a new link instead of repeating this one: a
+            // link names one download server, and that server may be the part that is failing.
+            m_links.remove(fileIndex);
+            m_status.failureDetail = describeRangeError(rangeError);
             const Reason reason = (rangeError.category == FailureCategory::BadResponse) ? Reason::NoByteRangeSupport : reasonFor(rangeError.category);
             onProbeResult(false, recovery, rangeError.category, reason, rangeError.retryAfterSeconds);
         });
@@ -579,9 +618,11 @@ void Hybrid::HybridCoordinator::onProbeResult(const bool ok, const bool recovery
         return;
     }
 
-    if (category != FailureCategory::None)
-        m_status.providerStatus = (reason == Reason::Uncached || reason == Reason::ProviderFetching)
-                ? m_status.providerStatus : statusFor(category);
+    // Reasons that describe the content, not the account, keep the status the manifest reported.
+    const bool keepProviderStatus = (reason == Reason::Uncached) || (reason == Reason::ProviderFetching)
+            || (reason == Reason::UnmatchedTorrentFiles) || (reason == Reason::ProviderLacksPieces);
+    if ((category != FailureCategory::None) && !keepProviderStatus)
+        m_status.providerStatus = statusFor(category);
     m_status.retryAfterSeconds = retryAfter.value_or(0);
 
     // Unavailability during probing is a single decisive observation: open the circuit so the
@@ -612,14 +653,40 @@ void Hybrid::HybridCoordinator::onProbeResult(const bool ok, const bool recovery
 
 bool Hybrid::HybridCoordinator::isPieceBound(const int piece) const
 {
-    if (!m_bound)
-        return false;
-    for (const PieceSlice &slice : m_sink->pieceSlices(piece))
+    return m_bound && (piece >= 0) && (piece < m_pieceBound.size()) && m_pieceBound.testBit(piece);
+}
+
+void Hybrid::HybridCoordinator::rebuildPieceCoverage()
+{
+    // Computed once per binding: schedule() consults it for every missing piece.
+    const int count = m_sink->pieceCount();
+    m_pieceBound = QBitArray(count);
+    for (int piece = 0; piece < count; ++piece)
     {
-        if (!slice.isPad && !m_binding.byNativeIndex.contains(slice.nativeFileIndex))
-            return false;
+        const QList<PieceSlice> slices = m_sink->pieceSlices(piece);
+        const bool bound = std::all_of(slices.cbegin(), slices.cend(), [this](const PieceSlice &slice)
+        {
+            return slice.isPad || m_binding.byNativeIndex.contains(slice.nativeFileIndex);
+        });
+        m_pieceBound.setBit(piece, bound);
     }
-    return true;
+}
+
+bool Hybrid::HybridCoordinator::hasProviderWork() const
+{
+    if (!m_bound)
+        return true; // unknown until the next probe
+    const QList<int> wanted = m_sink->wantedMissingPieces();
+    return std::any_of(wanted.cbegin(), wanted.cend(), [this](const int piece) { return isPieceBound(piece); });
+}
+
+void Hybrid::HybridCoordinator::armRecoveryProbe()
+{
+    // Going back to the provider is pointless when it needs the user or has nothing more to give:
+    // each attempt would pause the peers only to return here.
+    if (m_health.needsUser() || !m_provider || (m_provider->accountState() != AccountState::Connected) || !hasProviderWork())
+        return;
+    armTimer(std::max(m_health.nextProbeAtMs(), m_clock() + m_config.health.minDwellMs), MachineEvent::RecoveryDue);
 }
 
 void Hybrid::HybridCoordinator::ensureLinks(const QList<int> &fileIndexes, std::function<void (bool, const ProviderError &)> done)
@@ -683,14 +750,30 @@ void Hybrid::HybridCoordinator::schedule()
     if (wanted.isEmpty() && m_assemblies.isEmpty() && (m_ownership.counts().httpSubmitted == 0))
         return; // completion arrives through notifyFinished()
 
+    // Only pieces the provider can supply in full are candidates. Filtering before picking matters:
+    // an unbound piece must not occupy a slot that a later, bound piece could use.
+    QList<int> candidates;
+    candidates.reserve(wanted.size());
+    for (const int piece : wanted)
+    {
+        if (isPieceBound(piece))
+            candidates.append(piece);
+    }
+
+    if (candidates.isEmpty())
+    {
+        // Possibly done with the provider. Decided from the event loop: schedule() also runs while
+        // a state is being entered, and a nested transition would be announced out of order.
+        QMetaObject::invokeMethod(this, &HybridCoordinator::checkHttpExhausted, Qt::QueuedConnection);
+        return;
+    }
+
     const int freeSlots = m_config.maxPiecesInFlight - static_cast<int>(m_assemblies.size());
     if (freeSlots <= 0)
         return;
 
-    for (const int piece : m_ownership.pickForHttp(wanted, freeSlots))
+    for (const int piece : m_ownership.pickForHttp(candidates, freeSlots))
     {
-        if (!isPieceBound(piece))
-            continue;
         const qint64 length = m_sink->pieceLength(piece);
         if (m_budget && !m_budget->tryAcquire(length))
         {
@@ -708,6 +791,19 @@ void Hybrid::HybridCoordinator::schedule()
         dispatch(piece);
     }
     m_status.httpInFlight = static_cast<int>(m_assemblies.size());
+}
+
+void Hybrid::HybridCoordinator::checkHttpExhausted()
+{
+    if (!httpDispatchAllowed(m_machine.state()) || m_sink->isChecking() || !m_bound)
+        return;
+    if (!m_assemblies.isEmpty() || (m_ownership.counts().httpSubmitted != 0))
+        return; // verdicts still pending; a failed piece would become a candidate again
+    if (m_sink->wantedMissingPieces().isEmpty() || hasProviderWork())
+        return;
+
+    // Everything the provider can supply is verified; what is left needs bytes it does not expose.
+    fire(MachineEvent::HttpExhausted, Reason::ProviderLacksPieces);
 }
 
 void Hybrid::HybridCoordinator::dispatch(const int piece)
@@ -794,6 +890,7 @@ void Hybrid::HybridCoordinator::onAssemblyFailed(const int piece, const quint64 
         return; // already released by releaseAllFetching()
 
     m_ownership.releaseFetch(piece);
+    m_status.failureDetail = describeRangeError(error);
     handleHttpFailure(error.category, error.retryAfterSeconds, nativeFileIndex);
 }
 
@@ -934,6 +1031,10 @@ void Hybrid::HybridCoordinator::notifyFilePrioritiesChanged()
         }
     }
     schedule();
+
+    // Newly wanted files may be ones the provider has: let a peers-only torrent go back to it.
+    if ((m_machine.state() == TransportState::P2PActive) && !m_eventTimer->isActive())
+        armRecoveryProbe();
 }
 
 void Hybrid::HybridCoordinator::notifyProviderAccountChanged()

@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <QBitArray>
 #include <QDateTime>
 #include <QHash>
 #include <QObject>
@@ -99,6 +100,15 @@ namespace Hybrid
         qint64 httpRateBps = 0;
         quint64 switchCount = 0;
         qint64 retryAfterSeconds = 0;
+
+        // Result of the last provider probe. Counts and a fixed message only: never names or paths.
+        int torrentFileCount = 0;      // real (non-pad) files in the torrent
+        int providerFileCount = 0;     // files the provider exposes for it
+        int boundFileCount = 0;        // torrent files matched exactly to a provider file
+        int providerPieces = 0;        // missing pieces the provider can supply in full
+        int peerOnlyPieces = 0;        // missing pieces needing bytes the provider does not expose
+        QString matchFailure;          // why no file matched; empty when matching worked
+        QString failureDetail;         // last provider/CDN failure; redacted: no path, query or token
     };
 
     class HybridCoordinator final : public QObject
@@ -158,6 +168,7 @@ namespace Hybrid
         void preflight(bool recovery);
 
         void schedule();
+        void checkHttpExhausted();
         void dispatch(int piece);
         void ensureLinks(const QList<int> &fileIndexes, std::function<void (bool ok, const ProviderError &error)> done);
         void onAssemblyCompleted(int piece, quint64 epoch, const PieceBuffer &buffer);
@@ -165,6 +176,9 @@ namespace Hybrid
         void handleHttpFailure(FailureCategory category, std::optional<qint64> retryAfter, int nativeFileIndex);
         void checkDrained();
         bool isPieceBound(int piece) const;
+        void rebuildPieceCoverage();
+        bool hasProviderWork() const;
+        void armRecoveryProbe();
 
         TorrentPieceSink *m_sink = nullptr;
         QPointer<Provider> m_provider;
@@ -185,6 +199,7 @@ namespace Hybrid
         ProviderManifest m_manifest;
         BindingResult m_binding;
         bool m_bound = false;
+        QBitArray m_pieceBound;                     // per piece: every byte is in a bound provider file
         QHash<int, TemporaryLink> m_links;          // memory only
         QSet<int> m_linkRefreshed;
         QHash<int, QPointer<PieceAssembly>> m_assemblies;

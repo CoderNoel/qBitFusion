@@ -29,26 +29,64 @@
 #pragma once
 
 #include <QColor>
+#include <QIcon>
 #include <QPalette>
 
 class QPainter;
+class QStyle;
 class QRect;
+class QString;
 
-// qBitFusion's modern look: a curated light/dark palette plus one palette-driven stylesheet,
-// layered on qBittorrent's existing theme pipeline. A user-selected custom .qbtheme always wins,
-// and "Use classic qBittorrent appearance" restores the stock look.
+// qBitFusion's modern look: curated light/dark palettes, one palette-driven stylesheet, an original
+// monochrome icon set tinted at paint time, and the redesigned main window shell (see MainWindow).
+// A user-selected custom .qbtheme always wins, and Options > Behavior can restore the classic look.
 namespace ModernAppearance
 {
+    enum class Tone
+    {
+        Text,       // default icon colour
+        Muted,      // secondary text and inactive states
+        Accent,     // the one accent colour
+        Info,       // downloading
+        Success,    // seeding, completed, connected
+        Warning,    // stalled, queued, firewalled
+        Danger,     // errors, disconnected
+        Special,    // checking, moving
+        Inverse     // glyphs on primary (inverse-neutral) buttons
+    };
+
     bool isEnabledSetting();
     void setEnabledSetting(bool enabled);
 
     // Applied for this session (decided once at startup; toggling takes effect after restart).
     bool isActive();
+    bool isDark();
+
+    // Opacity of the accent tint used for selected rows, tabs and pages.
+    qreal selectionAlpha();
+
+    // The widget style for the modern look: the named base style with a few behaviour tweaks.
+    QStyle *createStyle(const QString &baseStyleName);
 
     void apply(bool dark);
-    QPalette palette(bool dark);
 
-    // Rounded "pill" progress bar used by item views while the modern look is active.
-    void paintProgressPill(QPainter *painter, const QRect &cellRect, int progress, const QString &text
-            , const QColor &fill, bool selected, const QPalette &palette);
+    // The accent colour tints selection, progress, focus and "on" states. The user picks it in
+    // Options; an invalid colour means the default. Setting it re-applies the look immediately.
+    QColor defaultAccent();
+    QColor accentSetting();
+    void setAccentSetting(const QColor &color);
+    QPalette palette(bool dark);
+    QColor color(Tone tone);
+
+    // Colour for a UI theme colour id ("TransferList.Downloading", "PiecesBar.Piece", ...), or an
+    // invalid colour when the modern look has no opinion and the stock default should be used.
+    QColor themeColor(const QString &colorId);
+
+    // Icon from the qBitFusion set for a theme icon id, or a null icon when the set has none.
+    // Monochrome icons follow the current light/dark scheme at paint time.
+    QIcon icon(const QString &iconId, bool forDarkSurface);
+
+    // Slim progress track with the value beside it, used by item views while the modern look is active.
+    void paintProgress(QPainter *painter, const QRect &cellRect, int progress, const QString &text
+            , const QColor &fill, bool enabled, const QPalette &palette);
 }

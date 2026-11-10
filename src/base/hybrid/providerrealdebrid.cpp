@@ -571,7 +571,7 @@ Hybrid::ProviderError Hybrid::RealDebridProvider::errorFrom(const int httpStatus
     else
     {
         error.category = FailureCategory::BadResponse;
-        error.message = tr("Unexpected response from Real-Debrid");
+        error.message = tr("Unexpected response from Real-Debrid") + u" (HTTP %1, code %2)"_s.arg(httpStatus).arg(code);
     }
     return error;
 }
@@ -756,15 +756,18 @@ void Hybrid::RealDebridProvider::resolveFileLink(const QString &resourceId, cons
         if ((it == selected.cend()) || (links.size() != selected.size()))
         {
             // Mapping between links and files is undocumented: refuse rather than guess.
-            callback(nonstd::make_unexpected(ProviderError {FailureCategory::BadResponse, tr("Cannot map Real-Debrid links to files"), std::nullopt}));
+            callback(nonstd::make_unexpected(ProviderError {FailureCategory::BadResponse
+                    , tr("Cannot map Real-Debrid links to files") + u" (%1 links, %2 files)"_s.arg(links.size()).arg(selected.size()), std::nullopt}));
             return;
         }
         const Selected file = *it;
+        const bool sizeIsUnique = (std::count_if(selected.cbegin(), selected.cend()
+                , [&file](const Selected &s) { return s.bytes == file.bytes; }) == 1);
         const QString hostLink = links.at(static_cast<qsizetype>(it - selected.cbegin())).toString();
 
         QUrlQuery form;
         form.addQueryItem(u"link"_s, hostLink);
-        call("POST", u"unrestrict/link"_s, {}, form, guard, [this, file, callback](const JsonResult &result)
+        call("POST", u"unrestrict/link"_s, {}, form, guard, [this, file, sizeIsUnique, callback](const JsonResult &result)
         {
             if (!result)
             {
@@ -775,14 +778,22 @@ void Hybrid::RealDebridProvider::resolveFileLink(const QString &resourceId, cons
             const QUrl download {u.value(u"download"_s).toString()};
             const qint64 size = u.value(u"filesize"_s).toInteger(-1);
             const QString name = u.value(u"filename"_s).toString();
-            if ((size != file.bytes) || (name != basename(file.path)))
+            // The exact byte size identifies the file. The name only disambiguates files of equal
+            // size: the service may present it differently from the torrent's path. Either way
+            // every piece is still verified against the torrent's own hashes by libtorrent.
+            const bool nameMatches = (name == basename(file.path));
+            if ((size != file.bytes) || (!nameMatches && !sizeIsUnique))
             {
-                callback(nonstd::make_unexpected(ProviderError {FailureCategory::BadResponse, tr("Real-Debrid link does not match the expected file"), std::nullopt}));
+                callback(nonstd::make_unexpected(ProviderError {FailureCategory::BadResponse
+                        , tr("Real-Debrid link does not match the expected file") + ((size != file.bytes) ? u" (size)"_s : u" (name)"_s), std::nullopt}));
                 return;
             }
-            if (checkUrl(download, dataUrlPolicy()) != UrlCheck::Allowed)
+            const UrlCheck hostCheck = checkUrl(download, dataUrlPolicy());
+            if (hostCheck != UrlCheck::Allowed)
             {
-                callback(nonstd::make_unexpected(ProviderError {FailureCategory::BadResponse, tr("Real-Debrid returned an unexpected download host"), std::nullopt}));
+                // Scheme and host only: the path and query of a download link are never shown.
+                callback(nonstd::make_unexpected(ProviderError {FailureCategory::BadResponse
+                        , tr("Real-Debrid returned an unexpected download host") + u" (%1: %2)"_s.arg(describe(hostCheck), redactUrl(download).left(120)), std::nullopt}));
                 return;
             }
             callback(TemporaryLink {download, size});

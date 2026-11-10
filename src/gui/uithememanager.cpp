@@ -141,9 +141,10 @@ UIThemeManager::UIThemeManager()
     else if (ModernAppearance::isEnabledSetting())
     {
         // qBitFusion modern look. Fusion renders stylesheets consistently on every platform; an
-        // explicitly chosen style is respected.
-        if (Preferences::instance()->getStyle().compare(u"system", Qt::CaseInsensitive) == 0)
-            QApplication::setStyle(u"fusion"_s);
+        // explicitly chosen style is respected (wrapped for a few behaviour tweaks).
+        const QString styleName = Preferences::instance()->getStyle();
+        const bool useDefaultStyle = styleName.isEmpty() || (styleName.compare(u"system", Qt::CaseInsensitive) == 0);
+        QApplication::setStyle(ModernAppearance::createStyle(useDefaultStyle ? u"fusion"_s : styleName));
         ModernAppearance::apply(prefersDarkColorScheme());
     }
 }
@@ -208,10 +209,15 @@ void UIThemeManager::onColorSchemeChanged()
     emit themeChanged();
 
     // workaround to refresh styled controls once color scheme is changed
-    QApplication::setStyle(QApplication::style()->name());
-
     if (ModernAppearance::isActive())
+    {
+        QApplication::setStyle(ModernAppearance::createStyle(QApplication::style()->name()));
         ModernAppearance::apply(prefersDarkColorScheme());
+    }
+    else
+    {
+        QApplication::setStyle(QApplication::style()->name());
+    }
 }
 
 QIcon UIThemeManager::getIcon(const QString &iconId, [[maybe_unused]] const QString &fallback, const ColorMode colorMode) const
@@ -221,6 +227,18 @@ QIcon UIThemeManager::getIcon(const QString &iconId, [[maybe_unused]] const QStr
     const auto iter = icons.find(iconId);
     if (iter != icons.end())
         return *iter;
+
+    const bool isBrandIcon = (iconId == u"qbittorrent") || (iconId == u"qbittorrent_mac")
+        || iconId.startsWith(u"qbittorrent-tray");
+    if (ModernAppearance::isActive() || isBrandIcon)
+    {
+        // Keep the application's identity in the classic UI too. Other icons follow the UI theme.
+        if (const QIcon modernIcon = ModernAppearance::icon(iconId, (colorMode == ColorMode::Dark)); !modernIcon.isNull())
+        {
+            icons[iconId] = modernIcon;
+            return modernIcon;
+        }
+    }
 
 #if (defined(Q_OS_UNIX) && !defined(Q_OS_MACOS))
     // Don't cache system icons because users might change them at run time
@@ -303,6 +321,12 @@ QPixmap UIThemeManager::getScaledPixmap(const QString &iconId, const int height)
 
 QColor UIThemeManager::getColor(const QString &id) const
 {
+    if (ModernAppearance::isActive())
+    {
+        if (const QColor modernColor = ModernAppearance::themeColor(id); modernColor.isValid())
+            return modernColor;
+    }
+
     const QColor color = m_themeSource->getColor(id, (isDarkTheme() ? ColorMode::Dark : ColorMode::Light));
     return color;
 }

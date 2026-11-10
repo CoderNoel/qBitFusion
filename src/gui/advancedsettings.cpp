@@ -511,7 +511,7 @@ void AdvancedSettings::loadAdvancedSettings()
                  , tr("Open documentation"))
         , this);
     labelQbtLink->setOpenExternalLinks(true);
-    addRow(QBITTORRENT_HEADER, u"<b>%1</b>"_s.arg(tr("qBittorrent Section")), labelQbtLink);
+    addRow(QBITTORRENT_HEADER, u"<b>%1</b>"_s.arg(tr("qBitFusion Section")), labelQbtLink);
     static_cast<QLabel *>(cellWidget(QBITTORRENT_HEADER, PROPERTY))->setAlignment(Qt::AlignCenter | Qt::AlignVCenter);
 
     auto *labelLibtorrentLink = new QLabel(
@@ -823,7 +823,7 @@ void AdvancedSettings::loadAdvancedSettings()
     addRow(RECHECK_COMPLETED, tr("Recheck torrents on completion"), &m_checkBoxRecheckCompleted);
     // Customize application instance name
     m_lineEditAppInstanceName.setText(app()->instanceName());
-    m_lineEditAppInstanceName.setToolTip(tr("It appends the text to the window title to help distinguish qBittorrent instances"));
+    m_lineEditAppInstanceName.setToolTip(tr("It appends the text to the window title to help distinguish qBitFusion instances"));
     addRow(APP_INSTANCE_NAME, tr("Customize application instance name"), &m_lineEditAppInstanceName);
     // Refresh interval
     m_spinBoxListRefresh.setMinimum(30);

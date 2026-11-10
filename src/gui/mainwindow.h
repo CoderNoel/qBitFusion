@@ -40,6 +40,7 @@
 
 class QCloseEvent;
 class QComboBox;
+class QLabel;
 class QFileSystemWatcher;
 class QSplitter;
 class QString;
@@ -61,6 +62,11 @@ class StatusBar;
 class TorrentCreatorDialog;
 class TransferListFiltersWidget;
 class TransferListWidget;
+
+namespace Modern
+{
+    class NavButton;
+}
 
 struct PluginInfo;
 
@@ -201,6 +207,10 @@ private:
     bool event(QEvent *e) override;
     void displayRSSTab(bool enable);
     void displaySearchTab(bool enable);
+    // qBitFusion modern shell: header with page switcher, search and primary actions; action bar over the list.
+    void setupModernShell(QSplitter *transferSplitter);
+    void refreshPageSwitcher();
+    void updateSelectionSummary();
     void createTorrentTriggered(const Path &path);
     void showStatusBar(bool show);
     void showFiltersSidebar(bool show);
@@ -257,6 +267,12 @@ private:
     QPointer<SearchWidget> m_searchWidget;
     QPointer<RSSWidget> m_rssWidget;
     QPointer<ExecutionLogWidget> m_executionLog;
+    // Modern shell (null with the classic look)
+    Modern::NavButton *m_navTransfers = nullptr;
+    Modern::NavButton *m_navSearch = nullptr;
+    Modern::NavButton *m_navRSS = nullptr;
+    Modern::NavButton *m_navLog = nullptr;
+    QLabel *m_selectionSummary = nullptr;
     // Power Management
     PowerManagement *m_pwr = nullptr;
     QTimer *m_preventTimer = nullptr;

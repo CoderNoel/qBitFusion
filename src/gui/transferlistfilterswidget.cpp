@@ -39,6 +39,7 @@
 #include "base/bittorrent/session.h"
 #include "base/global.h"
 #include "base/preferences.h"
+#include "modern/modernappearance.h"
 #include "base/utils/compare.h"
 #include "transferlistfilters/categoryfilterwidget.h"
 #include "transferlistfilters/statusfilterwidget.h"
@@ -62,7 +63,9 @@ TransferListFiltersWidget::TransferListFiltersWidget(QWidget *parent, TransferLi
     auto *mainWidgetLayout = new QVBoxLayout(mainWidget);
     mainWidgetLayout->setContentsMargins(0, 2, 0, 0);
     mainWidgetLayout->setSpacing(2);
-    mainWidgetLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    mainWidgetLayout->setAlignment(ModernAppearance::isActive() ? Qt::AlignTop : (Qt::AlignLeft | Qt::AlignTop));
+    if (ModernAppearance::isActive())
+        mainWidgetLayout->setContentsMargins(4, 4, 4, 8);
 
     {
         auto *statusFilterWidget = new StatusFilterWidget(this, transferList);

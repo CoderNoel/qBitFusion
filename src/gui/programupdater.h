@@ -49,6 +49,9 @@ public:
 
     using QObject::QObject;
 
+    // qBitFusion ships without an update feed; upstream's would install stock qBittorrent.
+    static constexpr bool isDisabledForThisBuild() { return true; }
+
     void checkForUpdates();
     Version getNewVersion() const;
     bool updateProgram() const;

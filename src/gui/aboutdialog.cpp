@@ -56,14 +56,15 @@ AboutDialog::AboutDialog(QWidget *parent)
     m_ui->setupUi(this);
 
     // Title
-    m_ui->labelName->setText(QStringLiteral("<b><h2>qBittorrent " QBT_VERSION " (%1-bit)</h2></b>").arg(QT_POINTER_SIZE * 8));
+    m_ui->labelName->setText(QStringLiteral("<b><h2>qBitFusion " QBT_VERSION " (%1-bit)</h2></b>").arg(QT_POINTER_SIZE * 8));
 
-    m_ui->logo->setPixmap(UIThemeManager::instance()->getScaledPixmap(u"qbittorrent-tray"_s, 32));
+    m_ui->logo->setPixmap(UIThemeManager::instance()->getScaledPixmap(u"qbittorrent"_s, 40));
 
     // About
     const QString aboutText =
         u"<p style=\"white-space: pre-wrap;\">"
         u"%1\n\n"
+        u"%6\n\n"
         u"%2\n\n"
         u"<table>"
         u"<tr><td>%3</td><td><a href=\"https://www.qbittorrent.org\">https://www.qbittorrent.org</a></td></tr>"
@@ -76,7 +77,10 @@ AboutDialog::AboutDialog(QWidget *parent)
             , tr("Copyright %1 2006-2026 The qBittorrent project").arg(C_COPYRIGHT)
             , tr("Home Page:")
             , tr("Forum:")
-            , tr("Bug Tracker:"));
+            , tr("Bug Tracker:")
+            , tr("qBitFusion adds debrid-assisted downloads and a redesigned interface to qBittorrent. "
+                "It is an independent build and is not supported by the qBittorrent project. "
+                "The links below are for qBittorrent itself."));
     m_ui->labelAbout->setText(aboutText);
 
     m_ui->labelMascot->setPixmap(Utils::Gui::scaledPixmap(Path(u":/icons/mascot.png"_s)));

@@ -37,3 +37,31 @@ function Send-QbfKey([IntPtr]$Handle, [int]$VirtualKey, [switch]$Alt) {
     }
 }
 function Move-QbfWindow([IntPtr]$Handle, [int]$Width, [int]$Height) { [void][QbfWin]::MoveWindow($Handle, 40, 40, $Width, $Height, $true) }
+# Click at client coordinates (physical pixels) by posting mouse messages to the window. Works without
+# activating the window, so it never steals focus from whatever the user is doing.
+function Send-QbfClick([IntPtr]$Handle, [int]$X, [int]$Y) {
+    $lParam = [IntPtr](($Y -shl 16) -bor ($X -band 0xFFFF))
+    [void][QbfWin]::PostMessage($Handle, 0x0200, [IntPtr]0, $lParam)   # WM_MOUSEMOVE
+    Start-Sleep -Milliseconds 120
+    [void][QbfWin]::PostMessage($Handle, 0x0201, [IntPtr]1, $lParam)   # WM_LBUTTONDOWN
+    Start-Sleep -Milliseconds 60
+    [void][QbfWin]::PostMessage($Handle, 0x0202, [IntPtr]0, $lParam)   # WM_LBUTTONUP
+}
+
+# Ask an app to exit the way an installer does (Restart Manager semantics): the session-end pair
+# WM_QUERYENDSESSION / WM_ENDSESSION with ENDSESSION_CLOSEAPP. Unlike WM_CLOSE this is not swallowed
+# by "close to tray", needs no confirmation dialog, and still runs the app's normal shutdown, so
+# qBittorrent saves resume data first. Returns $true once the process has exited.
+function Request-QbfExit([int]$ProcessId, [int]$TimeoutSeconds = 60) {
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if (-not $process) { return $true }
+    $handle = $process.MainWindowHandle
+    if ($handle -eq [IntPtr]::Zero) { $handle = Find-QbfWindow -ProcessId $ProcessId -Title "qBitFusion" }
+    if ($handle -eq [IntPtr]::Zero) { return $false }
+    [void][QbfWin]::PostMessage($handle, 0x0011, [IntPtr]0, [IntPtr]1)   # WM_QUERYENDSESSION
+    Start-Sleep -Seconds 3
+    [void][QbfWin]::PostMessage($handle, 0x0016, [IntPtr]1, [IntPtr]1)   # WM_ENDSESSION
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $deadline)) { Start-Sleep -Milliseconds 500 }
+    return -not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
+}

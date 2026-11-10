@@ -59,11 +59,11 @@ void ProgressBarPainter::paint(QPainter *painter, const QStyleOptionViewItem &op
 {
     if (ModernAppearance::isActive())
     {
-        // Selection/hover background from the view's (stylesheet-aware) style, then a rounded pill.
+        // Selection/hover background from the view's (stylesheet-aware) style, then a slim track.
         const QStyle *viewStyle = option.widget ? option.widget->style() : m_dummyProgressBar.style();
         viewStyle->drawPrimitive(QStyle::PE_PanelItemViewItem, &option, painter, option.widget);
-        ModernAppearance::paintProgressPill(painter, option.rect, progress, text, (color.isValid() ? color : m_chunkColor)
-                , option.state.testFlag(QStyle::State_Selected), option.palette);
+        ModernAppearance::paintProgress(painter, option.rect, progress, text, color
+                , option.state.testFlag(QStyle::State_Enabled), option.palette);
         return;
     }
 

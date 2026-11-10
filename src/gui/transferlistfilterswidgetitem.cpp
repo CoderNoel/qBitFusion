@@ -28,12 +28,16 @@
 
 #include "transferlistfilterswidgetitem.h"
 
+#include <algorithm>
+
 #include <QCheckBox>
 #include <QFont>
 #include <QPainter>
 #include <QString>
 #include <QStyleOptionViewItem>
 #include <QVBoxLayout>
+
+#include "modern/modernappearance.h"
 
 namespace
 {
@@ -46,6 +50,28 @@ namespace
         void paintEvent(QPaintEvent *) override
         {
             QPainter painter {this};
+
+            if (ModernAppearance::isActive())
+            {
+                // Quiet section label; the collapse chevron stays out of the way until needed.
+                painter.setRenderHint(QPainter::Antialiasing);
+                const QRect area = rect().adjusted(14, 0, -12, 0);
+                painter.setFont(font());
+                painter.setPen(palette().color(QPalette::PlaceholderText));
+                painter.drawText(area, (Qt::AlignVCenter | Qt::AlignLeft), text());
+                if (!underMouse() && isChecked())
+                    return;   // the chevron only shows on hover or while the section is collapsed
+
+                const QPointF center {area.right() - 4.0, area.center().y() + 0.5};
+                QPolygonF chevron;
+                if (isChecked())
+                    chevron << (center + QPointF(-3.5, -1.75)) << (center + QPointF(0, 1.75)) << (center + QPointF(3.5, -1.75));
+                else
+                    chevron << (center + QPointF(-1.75, -3.5)) << (center + QPointF(1.75, 0)) << (center + QPointF(-1.75, 3.5));
+                painter.setPen(QPen(painter.pen().color(), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                painter.drawPolyline(chevron);
+                return;
+            }
 
             QStyleOptionViewItem indicatorOption;
             indicatorOption.initFrom(this);
@@ -70,12 +96,33 @@ TransferListFiltersWidgetItem::TransferListFiltersWidgetItem(const QString &capt
     QFont font;
     font.setBold(true);
     font.setCapitalization(QFont::AllUppercase);
+    if (ModernAppearance::isActive())
+    {
+        // Sentence case, regular weight: a label, not a shouted heading.
+        font.setBold(false);
+        font.setCapitalization(QFont::MixedCase);
+        font.setWeight(QFont::Medium);
+        font.setPointSizeF(std::max(7.0, font.pointSizeF() - 1.0));
+        m_caption->setMinimumHeight(28);
+        m_caption->setCursor(Qt::PointingHandCursor);
+        m_caption->setAttribute(Qt::WA_Hover);
+        m_caption->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    }
     m_caption->setFont(font);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 2, 0, 0);
     layout->setSpacing(2);
-    layout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    if (ModernAppearance::isActive())
+    {
+        layout->setContentsMargins(0, 6, 0, 0);
+        layout->setSpacing(0);
+        layout->setAlignment(Qt::AlignTop);
+    }
+    else
+    {
+        layout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    }
     layout->addWidget(m_caption);
     layout->addWidget(m_filterWidget);
 

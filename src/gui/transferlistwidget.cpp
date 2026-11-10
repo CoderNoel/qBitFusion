@@ -54,6 +54,7 @@
 #include "base/logger.h"
 #include "base/path.h"
 #include "base/preferences.h"
+#include "base/settingvalue.h"
 #include "base/torrentfilter.h"
 #include "base/utils/compare.h"
 #include "base/utils/fs.h"
@@ -161,7 +162,21 @@ TransferListWidget::TransferListWidget(IGUIApplication *app, QWidget *parent)
     const auto syncSourceColumn = [this]
     {
         const auto *manager = Hybrid::HybridManager::instance();
-        setColumnHidden(TransferListModel::TR_SOURCE, !(manager->isEnabled() || (manager->hybridTorrentCount() > 0)));
+        const bool show = manager->isEnabled() || (manager->hybridTorrentCount() > 0);
+        setColumnHidden(TransferListModel::TR_SOURCE, !show);
+
+        // The column is appended last, where it is scrolled out of view. Once, when the feature is
+        // first in use, place it next to Status. After that it is an ordinary, movable column.
+        SettingValue<bool> placed {u"GUI/HybridSourceColumnPlaced"_s};
+        if (show && !placed.get(false))
+        {
+            const int from = header()->visualIndex(TransferListModel::TR_SOURCE);
+            const int status = header()->visualIndex(TransferListModel::TR_STATUS);
+            header()->moveSection(from, ((from < status) ? status : (status + 1)));
+            setColumnWidth(TransferListModel::TR_SOURCE, std::max(columnWidth(TransferListModel::TR_SOURCE), 230));
+            placed = true;
+            saveSettings();
+        }
     };
     connect(Hybrid::HybridManager::instance(), &Hybrid::HybridManager::settingsChanged, this, syncSourceColumn);
     QMetaObject::invokeMethod(this, syncSourceColumn, Qt::QueuedConnection);
@@ -1046,7 +1061,7 @@ void TransferListWidget::addHybridSourceMenu(QMenu *listMenu)
     addChoice(Hybrid::TransportPolicy::DebridPreferred, tr("Debrid preferred, BitTorrent fallback…")
             , tr("HTTPS while available; asks before allowing BitTorrent peers."));
     addChoice(Hybrid::TransportPolicy::TorrentOnly, tr("BitTorrent (standard)")
-            , tr("Standard qBittorrent behaviour."));
+            , tr("Standard BitTorrent behaviour."));
 }
 
 void TransferListWidget::displayListMenu()

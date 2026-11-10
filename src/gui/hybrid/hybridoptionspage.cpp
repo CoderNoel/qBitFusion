@@ -76,7 +76,7 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     titleFont.setBold(true);
     title->setFont(titleFont);
     layout->addWidget(title);
-    layout->addWidget(muted(tr("Download torrents over HTTPS from a debrid service you subscribe to. qBittorrent stays in charge: "
+    layout->addWidget(muted(tr("Download torrents over HTTPS from a debrid service you subscribe to. qBitFusion stays in charge: "
             "every piece is verified against the original torrent, there is still one download, one set of files and one "
             "info-hash, and verified pieces are kept if the source changes."), content));
 

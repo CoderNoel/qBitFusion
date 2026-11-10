@@ -123,6 +123,9 @@ namespace Hybrid
         bool m_headersValidated = false;
         bool m_replyDone = false;
         bool m_finished = false;
+        // Set when the status line already decided the outcome and only the error page is awaited.
+        std::optional<RangeError> m_rejected;
+        QTimer *m_errorPageTimer = nullptr;
     };
 }
 

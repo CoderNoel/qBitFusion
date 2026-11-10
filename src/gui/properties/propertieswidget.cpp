@@ -54,6 +54,7 @@
 #include "gui/autoexpandabledialog.h"
 #include "gui/filterpatternformatmenu.h"
 #include "gui/lineedit.h"
+#include "gui/modern/modernappearance.h"
 #include "gui/trackerlist/trackerlistwidget.h"
 #include "gui/uithememanager.h"
 #include "gui/utils.h"
@@ -130,7 +131,10 @@ PropertiesWidget::PropertiesWidget(QWidget *parent)
     // Tab bar
     m_tabBar = new PropTabBar(nullptr);
     m_tabBar->setContentsMargins(0, 5, 0, 5);
-    m_ui->verticalLayout->addLayout(m_tabBar);
+    if (ModernAppearance::isActive())
+        m_ui->verticalLayout->insertLayout(0, m_tabBar);   // tabs above their content
+    else
+        m_ui->verticalLayout->addLayout(m_tabBar);
     connect(m_tabBar, &PropTabBar::tabChanged, m_ui->stackedProperties, &QStackedWidget::setCurrentIndex);
     connect(m_tabBar, &PropTabBar::tabChanged, this, &PropertiesWidget::saveSettings);
     connect(m_tabBar, &PropTabBar::visibilityToggled, this, &PropertiesWidget::setVisibility);
@@ -359,6 +363,9 @@ void PropertiesWidget::readSettings()
     const bool visible = pref->getPropVisible();
     m_ui->filesList->header()->restoreState(pref->getPropFileListState());
     m_tabBar->setCurrentIndex(currentTab);
+    // An open panel always has a current tab in the modern look (a fresh profile stores none).
+    if (visible && ModernAppearance::isActive() && (m_tabBar->currentIndex() < 0))
+        m_tabBar->setCurrentIndex(PropTabBar::MainTab);
     if (!visible)
         setVisibility(false);
 }
@@ -615,7 +622,7 @@ void PropertiesWidget::askWebSeed()
     qDebug("Adding %s web seed", qUtf8Printable(urlSeed));
     if (!m_ui->listWebSeeds->findItems(urlSeed, Qt::MatchFixedString).empty())
     {
-        QMessageBox::warning(this, u"qBittorrent"_s, tr("This web seed is already in the list."), QMessageBox::Ok);
+        QMessageBox::warning(this, u"qBitFusion"_s, tr("This web seed is already in the list."), QMessageBox::Ok);
         return;
     }
     if (m_torrent)
@@ -667,7 +674,7 @@ void PropertiesWidget::editWebSeed()
 
     if (!m_ui->listWebSeeds->findItems(newSeed, Qt::MatchFixedString).empty())
     {
-        QMessageBox::warning(this, u"qBittorrent"_s,
+        QMessageBox::warning(this, u"qBitFusion"_s,
                              tr("This web seed is already in the list."),
                              QMessageBox::Ok);
         return;

@@ -118,6 +118,44 @@ private slots:
         QCOMPARE(m.handle(E::ProviderNeedsUser, c).to, S::WaitingForUser);
     }
 
+    void providerExhaustedHandsTheRestToPeersOnlyIfPermitted() const
+    {
+        // The provider supplied all it can; the remaining pieces need bytes it does not expose.
+        const auto ready = [](TransportStateMachine &m, const MachineContext &c)
+        {
+            m.handle(E::Enable, c);
+            m.handle(E::ProviderReady, c);
+            QCOMPARE(m.state(), S::HttpActive);
+        };
+
+        TransportStateMachine consented;
+        const auto withConsent = ctx(TransportPolicy::DebridPreferred, true);
+        ready(consented, withConsent);
+        const Transition toPeers = consented.handle(E::HttpExhausted, withConsent, Reason::ProviderLacksPieces);
+        QCOMPARE(toPeers.to, S::P2PActive);
+        QCOMPARE(toPeers.reason, Reason::ProviderLacksPieces);
+
+        TransportStateMachine unconsented;
+        const auto withoutConsent = ctx(TransportPolicy::DebridPreferred, false);
+        ready(unconsented, withoutConsent);
+        const Transition ask = unconsented.handle(E::HttpExhausted, withoutConsent, Reason::ProviderLacksPieces);
+        QCOMPARE(ask.to, S::WaitingForUser);
+        QCOMPARE(ask.reason, Reason::PermissionRequiredForP2P);
+
+        TransportStateMachine strict;
+        const auto debridOnly = ctx(TransportPolicy::DebridOnly, true /* ignored */);
+        ready(strict, debridOnly);
+        const Transition stop = strict.handle(E::HttpExhausted, debridOnly, Reason::ProviderLacksPieces);
+        QCOMPARE(stop.to, S::WaitingForUser);   // retrying cannot produce the missing bytes
+        QCOMPARE(stop.reason, Reason::ProviderLacksPieces);
+        QVERIFY(!swarmAllowed(strict.state(), debridOnly));
+
+        // Only meaningful while HTTP is active.
+        TransportStateMachine probing;
+        probing.handle(E::Enable, withConsent);
+        QCOMPARE(probing.handle(E::HttpExhausted, withConsent).to, S::ProbingProvider);
+    }
+
     void switchingToDebridOnlyStopsP2P() const
     {
         TransportStateMachine m;

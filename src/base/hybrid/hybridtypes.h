@@ -92,6 +92,7 @@ namespace Hybrid
         ProviderFetching,
         ContentUnavailable,
         UnmatchedTorrentFiles,
+        ProviderLacksPieces,
         NoByteRangeSupport,
         ProviderOutage,
         IntegrityFailure,

@@ -34,3 +34,32 @@ Harness: `qbitfusion/spike/ltspike.cpp`. Fixtures: 3 files (100 000 / 70 001 / 1
 - G2 overlap (HTTP and P2P on different pieces *simultaneously*) was **not** attempted. The serialized mode makes it unnecessary for the MVP.
 - Partial-piece handover after graceful pause was observed with 0 partial blocks left. A partial piece surviving a pause is not yet exercised.
 - Windows only. Linux/macOS not run.
+
+## ADR-009 | Provider coverage is decided per piece — ACCEPTED (2026-11-11)
+
+**Trigger (live report).** A two-file torrent (a 71-byte text file at offset 0, then an 80 GiB video) was added with `debrid_preferred`. The Real-Debrid account held the torrent with only the video selected. qBitFusion logged `PROBING_PROVIDER -> P2P_ACTIVE (unmatched_torrent_files)` and downloaded everything from peers.
+
+**Cause.** The MVP failed closed on the whole torrent when *any* wanted piece touched a file the provider does not expose. Piece 0 holds 71 bytes of the text file, so one piece disqualified 5148.
+
+**Decision.** The specification's "selected-file boundary" rule applied as written: *"If exact data is missing, assign piece to allowed P2P or fail clearly."*
+- A piece is an HTTP candidate only if every byte of it lies in an exactly bound provider file (path and size, ADR-005 unchanged; no basename or fuzzy matching was added).
+- Candidates are filtered *before* picking, so unbound pieces cannot occupy HTTP slots.
+- When every candidate is verified and other wanted pieces remain, the new machine event `HttpExhausted` hands the rest to peers if the policy permits (`debrid_preferred` with consent), asks for consent (`debrid_preferred` without), or stops in `WAITING_FOR_USER` with reason `provider_lacks_pieces` (`debrid_only`). No swarm contact under `debrid_only`.
+- With nothing left for the provider to give, no recovery probe is armed: probing would pause the peers only to return.
+- Sources stay serialized (ADR-007): HTTP and P2P never run at the same time, so the collision rule is untouched.
+
+**Evidence.** `testhybridstatemachine::providerExhaustedHandsTheRestToPeersOnlyIfPermitted`; `testhybridcoordinator::partialProviderCoverageUsesProviderThenPeers` (real libtorrent session: HTTP verifies exactly the fully covered pieces, peers fetch only the rest, output byte-identical, one source switch, one manifest call, 0 collisions) and `…DebridOnlyStopsWithoutSwarm` (0 tracker/peer connections, 0 hold releases). 32/32 ctest suites.
+
+## Live Real-Debrid observations (2026-11-11, one account, one torrent — not a general proof)
+
+First run of the adapter against the real service, in the user's installed copy, with their own account and torrent.
+
+| Observation | Consequence |
+|---|---|
+| `GET /torrents` + `/torrents/info/{id}` found the torrent by info-hash; file paths bound exactly with the root folder stripped; `links` had one entry for the one selected file. | Assumptions 2 and 3 of STATUS risk 1 held for this case. |
+| `POST /unrestrict/link` returned two download hosts of the form `<site>.download.real-debrid.com`. | The `real-debrid.com` host suffix allowlist held. |
+| A `Range: bytes=0-0` preflight got `206` with the right `Content-Range` but a `Content-Length` that was not 1 (value not captured). | Preflight now requests the first KiB. Piece requests never end at offset 0, except a 1-byte slice at the start of a file (untested). The strict `Content-Length` check is unchanged. |
+| The same download link returned `503` three times in a row (56 s, then 127 s apart), with a 2251-byte error page. | A failed preflight now drops the cached link, so the next attempt unrestricts again (a new link may name another server). Whether that alone clears a `503` is **not established**: the attempt that succeeded changed the range, the link and the `User-Agent` at once. |
+| After those changes: `PROBING_PROVIDER -> HTTP_ACTIVE (provider_ready)`; verified pieces rose from 570 to 587 in about 40 s at ~10 MiB/s with 0 peers connected. | P5 "live smoke" partially done. Completion of the whole torrent, link expiry mid-transfer and the hand-over of leftover pieces to peers were not observed. |
+
+Diagnostics added for this: a redacted failure detail in the log and the Source tooltip (scheme and host only, header sizes, and a summary of the server's error page with links, paths, tokens and addresses removed; `testhybridrangevalidation::errorPageSummaryIsRedacted`).

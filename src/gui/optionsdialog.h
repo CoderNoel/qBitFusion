@@ -41,6 +41,11 @@ class QListWidgetItem;
 class AdvancedSettings;
 class QCheckBox;
 
+namespace Modern
+{
+    class AccentPicker;
+}
+
 namespace HybridGui
 {
     class OptionsPage;
@@ -219,6 +224,7 @@ private:
 
     HybridGui::OptionsPage *m_hybridPage = nullptr;
     QCheckBox *m_checkModernAppearance = nullptr;
+    Modern::AccentPicker *m_accentPicker = nullptr;
 
     bool m_refreshingIpFilter = false;
 

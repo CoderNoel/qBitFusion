@@ -67,6 +67,7 @@ namespace
         {Hybrid::Reason::ProviderFetching, u"provider_fetching"},
         {Hybrid::Reason::ContentUnavailable, u"content_unavailable"},
         {Hybrid::Reason::UnmatchedTorrentFiles, u"unmatched_torrent_files"},
+        {Hybrid::Reason::ProviderLacksPieces, u"provider_lacks_pieces"},
         {Hybrid::Reason::NoByteRangeSupport, u"no_byte_range_support"},
         {Hybrid::Reason::ProviderOutage, u"provider_outage"},
         {Hybrid::Reason::IntegrityFailure, u"integrity_failure"},
@@ -269,6 +270,8 @@ QString Hybrid::displayText(const Reason reason)
         return tr("Content unavailable");
     case Reason::UnmatchedTorrentFiles:
         return tr("Unmatched torrent files");
+    case Reason::ProviderLacksPieces:
+        return tr("Remaining pieces are not on the provider");
     case Reason::NoByteRangeSupport:
         return tr("Provider does not support byte ranges");
     case Reason::ProviderOutage:

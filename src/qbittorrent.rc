@@ -1,6 +1,6 @@
 #pragma code_page(65001) // UTF-8
 
-IDI_ICON1 ICON "icons\qbittorrent.ico"
+IDI_ICON1 ICON "gui\modern\brand\qbitfusion.ico"
 IDI_ICON2 ICON "icons\qbittorrent_file.ico"
 
 #include <windows.h>
@@ -31,13 +31,13 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "CompanyName",      "The qBittorrent Project"
-            VALUE "FileDescription",  "qBittorrent - A Bittorrent Client"
+            VALUE "CompanyName",      "qBitFusion contributors"
+            VALUE "FileDescription",  "qBitFusion - BitTorrent client with debrid downloads"
             VALUE "FileVersion",      VER_FILEVERSION_STR
             VALUE "InternalName",     "qbittorrent"
-            VALUE "LegalCopyright",   "Copyright ©2006-2026 The qBittorrent Project"
+            VALUE "LegalCopyright",   "Copyright ©2006-2026 The qBittorrent Project and qBitFusion contributors"
             VALUE "OriginalFilename", "qbittorrent.exe"
-            VALUE "ProductName",      "qBittorrent"
+            VALUE "ProductName",      "qBitFusion"
             VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
         END
     END

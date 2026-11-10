@@ -67,7 +67,7 @@ target_link_libraries(qbt_app PRIVATE
 
 set_target_properties(qbt_app PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 if (GUI)
-    set_target_properties(qbt_app PROPERTIES OUTPUT_NAME qbittorrent)
+    set_target_properties(qbt_app PROPERTIES OUTPUT_NAME qbitfusion)
 else()
     set_target_properties(qbt_app PROPERTIES OUTPUT_NAME qbittorrent-nox)
 endif()
@@ -124,6 +124,10 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_sources(qbt_app PRIVATE ${qBittorrent_SOURCE_DIR}/src/qbittorrent_mingw.rc)
     else()
         target_sources(qbt_app PRIVATE ${qBittorrent_SOURCE_DIR}/src/qbittorrent.rc)
+        # Ninja's RC scanner does not track ICON files referenced by a resource script.
+        set_source_files_properties(${qBittorrent_SOURCE_DIR}/src/qbittorrent.rc PROPERTIES
+            OBJECT_DEPENDS "${qBittorrent_SOURCE_DIR}/src/gui/modern/brand/qbitfusion.ico;${qBittorrent_SOURCE_DIR}/src/icons/qbittorrent_file.ico"
+        )
     endif()
     target_sources(qbt_app PRIVATE ${qBittorrent_SOURCE_DIR}/src/qbittorrent.exe.manifest)
 endif()

@@ -64,6 +64,7 @@ add_library(qbt_gui STATIC
     hybrid/hybridoptionspage.h
     hybrid/hybridwidgets.h
     modern/modernappearance.h
+    modern/modernwidgets.h
     guiapplicationcomponent.h
     hidabletabwidget.h
     interfaces/iguiapplication.h
@@ -175,6 +176,7 @@ add_library(qbt_gui STATIC
     hybrid/hybridoptionspage.cpp
     hybrid/hybridwidgets.cpp
     modern/modernappearance.cpp
+    modern/modernwidgets.cpp
     modern/modern.qrc
     hidabletabwidget.cpp
     ipsubnetwhitelistoptionsdialog.cpp
@@ -273,6 +275,7 @@ target_include_directories(qbt_gui PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(qbt_gui
     PRIVATE
         qbt_base
+        Qt::Svg
     PUBLIC
         Qt::Gui
         Qt::Widgets

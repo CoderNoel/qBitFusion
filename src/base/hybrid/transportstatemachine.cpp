@@ -141,6 +141,10 @@ Hybrid::TransportState Hybrid::TransportStateMachine::next(const MachineEvent ev
     case S::HttpActive:
         if ((event == E::HttpOutage) || (event == E::ProviderUnavailable) || (event == E::ProviderNeedsUser))
             return S::HttpDraining;
+        // Nothing is in flight when the provider is exhausted, so there is nothing to drain. The
+        // remaining pieces go to peers only if the policy permits; otherwise the user decides.
+        if (event == E::HttpExhausted)
+            return fallbackState(context, true, reason);
         return m_state;
 
     case S::HttpDraining:

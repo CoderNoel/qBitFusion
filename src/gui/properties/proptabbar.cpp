@@ -32,9 +32,23 @@
 #include <QKeySequence>
 #include <QPushButton>
 #include <QSpacerItem>
+#include <QStyle>
 
 #include "base/global.h"
 #include "gui/uithememanager.h"
+
+namespace
+{
+    // The pressed look marks the current tab. qBitFusion also tags it for the modern stylesheet,
+    // which cannot rely on the transient "down" state.
+    void markCurrent(QAbstractButton *button, const bool current)
+    {
+        button->setDown(current);
+        button->setProperty("qbfCurrent", current);
+        button->style()->unpolish(button);
+        button->style()->polish(button);
+    }
+}
 
 PropTabBar::PropTabBar(QWidget *parent)
     : QHBoxLayout(parent)
@@ -120,7 +134,7 @@ void PropTabBar::setCurrentIndex(int index)
     {
         if (m_currentIndex >= 0)
         {
-          m_btnGroup->button(m_currentIndex)->setDown(false);
+          markCurrent(m_btnGroup->button(m_currentIndex), false);
           m_currentIndex = -1;
           emit visibilityToggled(false);
         }
@@ -129,7 +143,7 @@ void PropTabBar::setCurrentIndex(int index)
     // Unselect previous tab
     if (m_currentIndex >= 0)
     {
-        m_btnGroup->button(m_currentIndex)->setDown(false);
+        markCurrent(m_btnGroup->button(m_currentIndex), false);
     }
     else
     {
@@ -137,7 +151,7 @@ void PropTabBar::setCurrentIndex(int index)
         emit visibilityToggled(true);
     }
     // Select the new button
-    m_btnGroup->button(index)->setDown(true);
+    markCurrent(m_btnGroup->button(index), true);
     m_currentIndex = index;
     // Emit the signal
     emit tabChanged(index);

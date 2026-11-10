@@ -32,6 +32,7 @@
 
 #include <QtTypes>
 #include <QByteArray>
+#include <QString>
 
 #include "hybridtypes.h"
 
@@ -91,6 +92,11 @@ namespace Hybrid
         LengthMismatch,          // Content-Length disagrees with range
         HttpError                // any other status; classify with classifyHttpStatus
     };
+
+    // Short plain-text summary of a server's error page, safe for logs: markup is dropped and every
+    // word that could be a link, path, query, token or network address is replaced. Empty if nothing
+    // readable remains. The input is untrusted.
+    QString summarizeErrorPage(const QByteArray &body);
 
     // Validates response headers for a single-range request before any body byte is trusted.
     RangeVerdict validateRangeResponse(const RangeResponseHead &head, const ByteRange &requested, qint64 expectedTotal);

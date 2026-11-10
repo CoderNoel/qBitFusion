@@ -76,6 +76,7 @@
 #include "advancedsettings.h"
 #include "hybrid/hybridoptionspage.h"
 #include "modern/modernappearance.h"
+#include "modern/modernwidgets.h"
 #include "banlistoptionsdialog.h"
 #include "interfaces/iguiapplication.h"
 #include "ipsubnetwhitelistoptionsdialog.h"
@@ -98,6 +99,10 @@
 
 #ifdef Q_OS_WIN
 #include "base/utils/os.h"
+#endif
+
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+#include "programupdater.h"
 #endif
 
 #define SETTINGS_KEY(name) u"OptionsDialog/" name
@@ -231,6 +236,20 @@ OptionsDialog::OptionsDialog(IGUIApplication *app, QWidget *parent)
         themeLayout->insertWidget(themeLayout->indexOf(m_ui->checkUseCustomTheme), m_checkModernAppearance);
     m_checkModernAppearance->setChecked(ModernAppearance::isEnabledSetting());
     connect(m_checkModernAppearance, &QCheckBox::toggled, this, &ThisType::enableApplyButton);
+
+    // Accent colour (selection, progress, focus), applied as soon as the options are saved.
+    if (ModernAppearance::isActive())
+    {
+        auto *accentRow = new QWidget(m_checkModernAppearance->parentWidget());
+        auto *accentLayout = new QHBoxLayout(accentRow);
+        accentLayout->setContentsMargins(0, 0, 0, 0);
+        accentLayout->addWidget(new QLabel(tr("Accent colour:"), accentRow));
+        m_accentPicker = new Modern::AccentPicker(accentRow);
+        accentLayout->addWidget(m_accentPicker, 1);
+        if (auto *themeLayout = qobject_cast<QBoxLayout *>(m_checkModernAppearance->parentWidget()->layout()))
+            themeLayout->insertWidget((themeLayout->indexOf(m_checkModernAppearance) + 1), accentRow);
+        connect(m_accentPicker, &Modern::AccentPicker::colorChanged, this, &ThisType::enableApplyButton);
+    }
 
     // Load Advanced settings
     m_advancedSettings = new AdvancedSettings(app, m_ui->tabAdvancedPage);
@@ -381,6 +400,7 @@ void OptionsDialog::loadBehaviorTabOptions()
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     m_ui->checkProgramUpdates->setChecked(pref->isUpdateCheckEnabled());
+    m_ui->checkProgramUpdates->setVisible(!ProgramUpdater::isDisabledForThisBuild());
 #else
     m_ui->checkProgramUpdates->setVisible(false);
 #endif
@@ -645,7 +665,7 @@ void OptionsDialog::loadDownloadsTabOptions()
     m_ui->deleteTorrentWarningLabel->setToolTip(u"<html><body><p>" +
         tr("By enabling these options, you can <strong>irrevocably lose</strong> your .torrent files!") +
         u"</p><p>" +
-        tr("When these options are enabled, qBittorrent will <strong>delete</strong> .torrent files "
+        tr("When these options are enabled, qBitFusion will <strong>delete</strong> .torrent files "
         "after they were successfully (the first option) or not (the second option) added to its "
         "download queue. This will be applied <strong>not only</strong> to the files opened via "
         "&ldquo;Add torrent&rdquo; menu action but to those opened via <strong>file type association</strong> as well") +
@@ -1603,7 +1623,7 @@ void OptionsDialog::onBtnWebUIAPIKeyRotateClicked()
         ? tr("Generate API key")
         : tr("Rotate API key");
     const QString message = m_currentAPIKey.isEmpty()
-        ? tr("Generate an API key? This key can be used to interact with qBittorrent's API.")
+        ? tr("Generate an API key? This key can be used to interact with qBitFusion's API.")
         : tr("Rotate this API key? The current key will immediately stop working and a new key will be generated.");
 
     const QMessageBox::StandardButton button = QMessageBox::question(
@@ -1714,6 +1734,11 @@ void OptionsDialog::saveOptions() const
     m_advancedSettings->saveAdvancedSettings();
     m_hybridPage->save();
     ModernAppearance::setEnabledSetting(m_checkModernAppearance->isChecked());
+    if (m_accentPicker)
+    {
+        const QColor accent = m_accentPicker->color();
+        ModernAppearance::setAccentSetting((accent.rgb() == ModernAppearance::defaultAccent().rgb()) ? QColor() : accent);
+    }
 
     // Assume that user changed multiple settings
     // so it's best to save immediately

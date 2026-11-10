@@ -36,6 +36,7 @@
 #include "base/global.h"
 #include "base/preferences.h"
 #include "base/torrentfilter.h"
+#include "gui/modern/modernappearance.h"
 #include "gui/transferlistwidget.h"
 #include "gui/uithememanager.h"
 
@@ -179,9 +180,11 @@ void StatusFilterWidget::updateTexts()
 
 void StatusFilterWidget::hideZeroItems()
 {
-    item(TorrentFilter::Downloading)->setHidden(m_nbDownloading == 0);
-    item(TorrentFilter::Seeding)->setHidden(m_nbSeeding == 0);
-    item(TorrentFilter::Completed)->setHidden(m_nbCompleted == 0);
+    // The modern sidebar always keeps the three everyday filters so an empty list still reads well.
+    const bool hideCore = !ModernAppearance::isActive();
+    item(TorrentFilter::Downloading)->setHidden(hideCore && (m_nbDownloading == 0));
+    item(TorrentFilter::Seeding)->setHidden(hideCore && (m_nbSeeding == 0));
+    item(TorrentFilter::Completed)->setHidden(hideCore && (m_nbCompleted == 0));
     item(TorrentFilter::Running)->setHidden(m_nbRunning == 0);
     item(TorrentFilter::Stopped)->setHidden(m_nbStopped == 0);
     item(TorrentFilter::Active)->setHidden(m_nbActive == 0);

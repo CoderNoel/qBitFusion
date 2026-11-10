@@ -32,6 +32,7 @@
 #include <QModelIndex>
 
 #include "base/preferences.h"
+#include "modern/modernappearance.h"
 #include "transferlistmodel.h"
 
 TransferListDelegate::TransferListDelegate(QObject *parent)
@@ -54,6 +55,8 @@ QSize TransferListDelegate::sizeHint(const QStyleOptionViewItem &option, const Q
 
     QSize size = QStyledItemDelegate::sizeHint(option, index);
     size.setHeight(std::max(m_nameColHeight, size.height()));
+    if (ModernAppearance::isActive())
+        size.setHeight(std::max(size.height(), 36));   // comfortable rows
     return size;
 }
 

@@ -140,6 +140,25 @@ QString HybridGui::sourceText(const Hybrid::HybridStatus &status)
     case S::HttpActive:
         return QCoreApplication::translate("HybridGui", "HTTPS · %1").arg(provider);
     case S::P2PActive:
+        // Name the cause, so the user can tell why the provider is not being used.
+        switch (status.lastReason)
+        {
+        case Hybrid::Reason::Uncached:
+            return QCoreApplication::translate("HybridGui", "BitTorrent · not cached on %1").arg(provider);
+        case Hybrid::Reason::ProviderFetching:
+            return QCoreApplication::translate("HybridGui", "BitTorrent · %1 still fetching").arg(provider);
+        case Hybrid::Reason::UnmatchedTorrentFiles:
+            return QCoreApplication::translate("HybridGui", "BitTorrent · files differ on %1").arg(provider);
+        case Hybrid::Reason::ProviderLacksPieces:
+            return QCoreApplication::translate("HybridGui", "BitTorrent · rest not on %1").arg(provider);
+        case Hybrid::Reason::ProviderOutage:
+        case Hybrid::Reason::WaitingForRetry:
+            return QCoreApplication::translate("HybridGui", "BitTorrent · %1 unavailable").arg(provider);
+        case Hybrid::Reason::NoByteRangeSupport:
+            return QCoreApplication::translate("HybridGui", "BitTorrent · %1 download refused").arg(provider);
+        default:
+            break;
+        }
         return QCoreApplication::translate("HybridGui", "BitTorrent (fallback)");
     case S::RecoveryProbing:
         return QCoreApplication::translate("HybridGui", "BitTorrent · checking %1").arg(provider);
@@ -171,6 +190,21 @@ QString HybridGui::sourceToolTip(const Hybrid::HybridStatus &status)
         lines << QCoreApplication::translate("HybridGui", "Provider: %1").arg(Hybrid::displayName(status.providerStatus).toHtmlEscaped());
     if (status.lastReason != Hybrid::Reason::None)
         lines << QCoreApplication::translate("HybridGui", "Last change: %1").arg(Hybrid::displayText(status.lastReason).toHtmlEscaped());
+    if (!status.failureDetail.isEmpty() && (status.state != Hybrid::TransportState::HttpActive))
+        lines << status.failureDetail.toHtmlEscaped();
+    if (!status.matchFailure.isEmpty())
+    {
+        lines << status.matchFailure.toHtmlEscaped();
+    }
+    else if (status.providerFileCount > 0)
+    {
+        lines << QCoreApplication::translate("HybridGui", "Provider has %1 of %2 files").arg(status.boundFileCount).arg(status.torrentFileCount);
+        if (status.peerOnlyPieces > 0)
+        {
+            lines << QCoreApplication::translate("HybridGui", "%1 pieces need BitTorrent peers: they include data the provider does not have")
+                    .arg(status.peerOnlyPieces);
+        }
+    }
     lines << QCoreApplication::translate("HybridGui", "HTTP ↓ %1 · %2 pieces verified from HTTPS")
             .arg(Utils::Misc::friendlyUnit(status.httpRateBps, true), QString::number(status.httpVerifiedPieces));
     if (status.httpHashFailures > 0)
@@ -278,7 +312,7 @@ void HybridGui::SourcePicker::updateDetails()
     switch (p)
     {
     case Hybrid::TransportPolicy::TorrentOnly:
-        text = tr("Standard qBittorrent behaviour. Downloads only from BitTorrent peers.");
+        text = tr("Standard BitTorrent behaviour. Downloads only from BitTorrent peers.");
         break;
     case Hybrid::TransportPolicy::DebridOnly:
         text = tr("Downloads only over HTTPS from your debrid service. No peer, tracker, DHT or PEX connections are made for this torrent, and it will not seed.");

@@ -1510,10 +1510,13 @@ qlonglong TorrentImpl::eta() const
                 : std::ranges::max(etaList);
     }
 
-    if (!speedAverage.download)
+    // qBitFusion: pieces arriving over HTTPS are not libtorrent payload, so their rate is added
+    // here. It is zero whenever the hybrid transport is not supplying this torrent.
+    const qint64 downloadSpeed = speedAverage.download + m_hybridHttpRate;
+    if (downloadSpeed <= 0)
         return MAX_ETA;
 
-    return (wantedSize() - completedSize()) / speedAverage.download;
+    return (wantedSize() - completedSize()) / downloadSpeed;
 }
 
 QList<qreal> TorrentImpl::filesProgress() const

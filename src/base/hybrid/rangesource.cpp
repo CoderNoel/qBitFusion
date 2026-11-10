@@ -35,6 +35,7 @@
 #include <QNetworkRequest>
 #include <QTimer>
 
+#include "base/version.h"
 #include "tokenbucket.h"
 
 using namespace Qt::Literals::StringLiterals;
@@ -43,6 +44,8 @@ namespace
 {
     constexpr qint64 READ_BUFFER_SIZE = 256 * 1024;
     constexpr int MAX_REDIRECTS = 5;
+    constexpr qint64 MAX_ERROR_PAGE = 16 * 1024;
+    constexpr int ERROR_PAGE_WAIT_MS = 3000;
 
     QByteArray header(const QNetworkReply *reply, const QByteArray &name)
     {
@@ -97,6 +100,7 @@ void Hybrid::RangeFetch::start()
     m_buffer.reserve(length);
 
     QNetworkRequest req {m_request.url};
+    req.setRawHeader("User-Agent", "qBitFusion/" QBT_VERSION);
     req.setRawHeader("Range", makeRangeHeader(m_request.range));
     // Disables Qt's transparent decompression; any other Content-Encoding is rejected.
     req.setRawHeader("Accept-Encoding", "identity");
@@ -145,6 +149,8 @@ void Hybrid::RangeFetch::cleanup()
         m_deadline->stop();
     if (m_throttle)
         m_throttle->stop();
+    if (m_errorPageTimer)
+        m_errorPageTimer->stop();
     if (m_reply)
     {
         m_reply->disconnect(this);
@@ -179,7 +185,7 @@ void Hybrid::RangeFetch::onRedirected(const QUrl &url)
 
 void Hybrid::RangeFetch::onMetaDataChanged()
 {
-    if (m_finished || !m_reply || m_headersValidated)
+    if (m_finished || !m_reply || m_headersValidated || m_rejected)
         return;
 
     const int status = m_reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -207,7 +213,22 @@ void Hybrid::RangeFetch::onMetaDataChanged()
     error.category = (verdict == RangeVerdict::HttpError)
             ? classifyHttpStatus(status, false) : classifyVerdict(verdict);
     error.retryAfterSeconds = parseRetryAfterSeconds(header(m_reply, "Retry-After"));
-    error.detail = u"HTTP %1 from %2"_s.arg(QString::number(status), redactUrl(m_currentUrl));
+    // Sizes and offsets only: the range headers carry no secret, and they are what explains a rejection.
+    error.detail = u"HTTP %1 from %2 (Content-Length %3, Content-Range '%4', Content-Encoding '%5')"_s
+            .arg(QString::number(status), redactUrl(m_currentUrl), QString::number(head.contentLength)
+                , QString::fromLatin1(head.contentRange.left(64)), QString::fromLatin1(head.contentEncoding.left(24)));
+
+    // A small error page usually says why the server refused. The outcome is already decided by
+    // the status line; wait a moment for the page only so that the reason can be reported.
+    if ((verdict == RangeVerdict::HttpError) && (status >= 400) && (head.contentLength > 0) && (head.contentLength <= MAX_ERROR_PAGE))
+    {
+        m_rejected = error;
+        m_errorPageTimer = new QTimer(this);
+        m_errorPageTimer->setSingleShot(true);
+        connect(m_errorPageTimer, &QTimer::timeout, this, [this] { fail(*m_rejected); });
+        m_errorPageTimer->start(ERROR_PAGE_WAIT_MS);
+        return;
+    }
     fail(error);
 }
 
@@ -269,8 +290,8 @@ void Hybrid::RangeFetch::complete()
 
 void Hybrid::RangeFetch::onReadyRead()
 {
-    if (m_finished || !m_reply)
-        return;
+    if (m_finished || !m_reply || m_rejected)
+        return; // a rejected response's page is read once, when the reply has finished
     if (!m_headersValidated)
     {
         onMetaDataChanged();
@@ -284,6 +305,16 @@ void Hybrid::RangeFetch::onFinished()
 {
     if (m_finished || !m_reply)
         return;
+
+    if (m_rejected)
+    {
+        RangeError error = *m_rejected;
+        const QString said = summarizeErrorPage(m_reply->read(MAX_ERROR_PAGE));
+        if (!said.isEmpty())
+            error.detail += u". Server said: \"%1\""_s.arg(said);
+        fail(error);
+        return;
+    }
 
     if (m_reply->error() != QNetworkReply::NoError)
     {
