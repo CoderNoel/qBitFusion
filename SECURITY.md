@@ -1,19 +1,38 @@
 # Security Policy
 
-qBittorrent takes the security of our software seriously, including all source code repositories managed through our GitHub organisation.
-If you believe you have found a security vulnerability in qBittorrent, please report it to us as described below.
+## Reporting a vulnerability
 
-## Reporting Security Issues
+Please do not report security problems in public issues.
 
-Please do not report security vulnerabilities through public GitHub issues. Instead, please use GitHub's private vulnerability reporting functionality associated to this repository. Additionally, you may email us with all security-related inquiries and notifications at `security@qbittorrent.org`.
+Use GitHub's private vulnerability reporting for this repository: open the **Security** tab and choose
+**Report a vulnerability**. Only the maintainers can see the report.
 
-Please include the requested information listed below (as much as you can provide) to help us better understand the nature and scope of the possible issue:
+Include, as far as you can:
 
-1. Type of issue
-2. Step-by-step instructions to reproduce the issue
-3. Proof-of-concept or exploit code (if possible)
-4. Potential impact of the issue, including how an attacker might exploit the issue
+1. the kind of problem and the part of the program it affects;
+2. step-by-step instructions to reproduce it;
+3. a proof of concept, if you have one;
+4. what an attacker could achieve.
 
-This information will help us triage your report more quickly. Any and all CVEs will be requested and issued through GitHub's private vulnerability reporting functionality, which will be published alongside the disclosure.
+Never include real provider tokens, signed download links or other credentials in a report. If a
+credential of yours was exposed while you investigated, revoke it with the provider.
 
-This security policy only applies to the most recent stable branch of qBittorrent. Flaws in old versions that are not present in the current stable branch will not be fixed.
+This is a volunteer project, so there is no guaranteed response time. Reports are handled as fast as the
+maintainers can manage, and fixes are credited to the reporter unless they prefer otherwise.
+
+## Scope
+
+In scope is the code this project adds to qBittorrent, in particular:
+
+- the hybrid transport (`src/base/hybrid`): response validation, the URL guard, credential storage, and
+  anything that could write unverified data to disk;
+- anything that makes a "Debrid only" torrent contact trackers, DHT or peers;
+- anything that puts a token or a signed link into a log, a settings file or an export.
+
+A vulnerability that is also present in stock qBittorrent should be reported to the
+[qBittorrent project](https://github.com/qbittorrent/qBittorrent/security/policy), which can fix it for
+everyone. Feel free to tell us as well, so that the fix is merged here quickly.
+
+## Supported versions
+
+Only the latest commit on the default branch is supported. There are no maintained release branches yet.

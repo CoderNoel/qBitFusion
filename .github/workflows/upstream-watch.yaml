@@ -1,0 +1,56 @@
+name: Upstream watch
+
+# Opens an issue when qBittorrent publishes a newer release in the series this fork is based on.
+# It only reports; merging is done by a person (see docs/UPSTREAM.md).
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'  # Mondays
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    name: Check for a newer upstream release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare with upstream tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git remote add upstream https://github.com/qbittorrent/qBittorrent.git
+          git fetch --quiet --tags upstream
+
+          base="$(git describe --tags --abbrev=0 --match 'release-[0-9]*' HEAD)"
+          series="${base%.*}"
+          latest="$(git tag --list "${series}.*" --sort=-v:refname | grep -Ev 'alpha|beta|rc' | head -n 1)"
+          echo "Based on: ${base}; latest in ${series}: ${latest}"
+
+          if [ -z "${latest}" ] || [ "${latest}" = "${base}" ]; then
+            echo "Up to date."
+            exit 0
+          fi
+
+          title="Upstream ${latest} is available"
+          if gh issue list --repo "${GITHUB_REPOSITORY}" --state open --search "\"${title}\" in:title" --json number --jq '.[].number' | grep -q .; then
+            echo "An issue is already open."
+            exit 0
+          fi
+
+          count="$(git rev-list --count "${base}..${latest}")"
+          gh issue create --repo "${GITHUB_REPOSITORY}" --title "${title}" --body "This fork is based on \`${base}\`. Upstream has published \`${latest}\` (${count} commits since the base).
+
+          How to merge it, and where conflicts are likely: docs/UPSTREAM.md
+
+          Upstream changes: https://github.com/qbittorrent/qBittorrent/compare/${base}...${latest}"

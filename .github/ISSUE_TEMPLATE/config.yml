@@ -1,17 +1,9 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Wiki
+  - name: The problem also happens in stock qBittorrent
+    url: "https://github.com/qbittorrent/qBittorrent/issues"
+    about: "Then it is an upstream bug. Report it to qBittorrent, following their rules. Do not report qBitFusion problems there."
+
+  - name: General qBittorrent usage
     url: "https://github.com/qbittorrent/qBittorrent/wiki/"
-    about: "Consult the wiki first (especially the FAQ), it might already contain the information you are looking for"
-
-  - name: Question
-    url: "https://github.com/qbittorrent/qBittorrent/discussions"
-    about: "Please ask questions related to usage/setup/support/non-issue development discussion in the Discussions section"
-
-  - name: Question
-    url: "http://forum.qbittorrent.org/"
-    about: "Alternatively, ask on the official forum"
-
-  - name: Question
-    url: "https://www.reddit.com/r/qBittorrent/"
-    about: "Alternatively, use the subreddit"
+    about: "Most of qBittorrent's documentation applies to qBitFusion as well"

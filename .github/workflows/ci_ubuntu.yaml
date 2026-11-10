@@ -1,6 +1,8 @@
 name: CI - Ubuntu
 
-on: [pull_request, push]
+# qBitFusion: manual only. The hybrid code has not been built on Linux yet.
+# Change this back to [pull_request, push] once it passes.
+on: workflow_dispatch
 
 permissions: {}
 

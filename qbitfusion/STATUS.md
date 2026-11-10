@@ -2,7 +2,7 @@
 
 **Issue/task ID:** CORE-001…005, NET-001…003, PROVIDER-001/002 (adapter; one live run, see DECISIONS.md), STATE-001/002, SEC-001, SEC-002 (partial), UX-001, UX-002 (desktop only), QA-001 (partial).
 
-**Baseline commit and environment:** qBittorrent `release-5.3.0` @ `9213075d` on branch `feature/hybrid-debrid` (uncommitted). Windows 11 Pro 10.0.26300, MSVC 14.44.35207, CMake 4.4.3/Ninja, Qt 6.10.3, libtorrent 2.1.2 (`a610c6ef4`, ABI 100), Boost 1.91.0, OpenSSL 3.6.5, zlib 1.3.2. Reproduce: `pwsh qbitfusion/scripts/bootstrap-windows.ps1`, then `pwsh qbitfusion/scripts/build-windows.ps1`. Install for the current user (Release build, Start menu + desktop shortcuts, Settings > Apps entry, isolated portable profile): `pwsh qbitfusion/scripts/install-windows.ps1`.
+**Baseline commit and environment:** qBittorrent `release-5.3.0` @ `9213075d` on branch `feature/hybrid-debrid`. Windows 11 Pro 10.0.26300, MSVC 14.44.35207, CMake 4.4.3/Ninja, Qt 6.10.3, libtorrent 2.1.2 (`a610c6ef4`, ABI 100), Boost 1.91.0, OpenSSL 3.6.5, zlib 1.3.2. Reproduce: `pwsh qbitfusion/scripts/bootstrap-windows.ps1`, then `pwsh qbitfusion/scripts/build-windows.ps1`. Install for the current user (Release build, Start menu + desktop shortcuts, Settings > Apps entry, isolated portable profile): `pwsh qbitfusion/scripts/install-windows.ps1`.
 
 ## What changed
 
