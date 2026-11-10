@@ -33,6 +33,7 @@
 #include <QtSystemDetection>
 
 #include <algorithm>
+#include <functional>
 #include <chrono>
 
 #include <QAction>
@@ -143,6 +144,30 @@ namespace
 #endif // Q_OS_WIN
 }
 
+namespace
+{
+    // Calls a function whenever the watched widget is resized.
+    class ResizeWatcher final : public QObject
+    {
+    public:
+        ResizeWatcher(std::function<void ()> onResize, QObject *parent)
+            : QObject(parent)
+            , m_onResize {std::move(onResize)}
+        {
+        }
+
+    private:
+        bool eventFilter(QObject *watched, QEvent *event) override
+        {
+            if (event->type() == QEvent::Resize)
+                m_onResize();
+            return QObject::eventFilter(watched, event);
+        }
+
+        std::function<void ()> m_onResize;
+    };
+}
+
 MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, const QString &titleSuffix)
     : GUIApplicationComponent(app)
     , m_ui {new Ui::MainWindow}
@@ -247,8 +272,8 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
 
     m_columnFilterEdit = new LineEdit;
     m_columnFilterEdit->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_columnFilterEdit->setFixedWidth(ModernAppearance::isActive() ? 300 : 200);
     m_columnFilterEdit->setPlaceholderText(ModernAppearance::isActive() ? tr("Search torrents") : tr("Filter torrents..."));
+    m_columnFilterEdit->setFixedWidth(ModernAppearance::isActive() ? 300 : 200);
     m_columnFilterEdit->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(m_columnFilterEdit, &QWidget::customContextMenuRequested, this, &MainWindow::showFilterContextMenu);
 
@@ -604,6 +629,10 @@ void MainWindow::setupModernShell(QSplitter *transferSplitter)
                 self(self, menu->actions());
             else
                 addAction(action);
+
+            // A menu shows either an icon or a check box. For a switch the state is what matters.
+            if (action->isCheckable())
+                action->setIconVisibleInMenu(false);
         }
     };
     registerActions(registerActions, m_ui->menubar->actions());
@@ -715,6 +744,41 @@ void MainWindow::setupModernShell(QSplitter *transferSplitter)
     mainMenu->addMenu(m_ui->menuHelp);
     menuButton->setMenu(mainMenu);
     header->addWidget(menuButton);
+
+    // The search field gives way first when the window is narrow, so that Add, the quick toggles
+    // and the menu never drop off the header.
+    const auto fitSearchField = [this, header, headerSpacer]
+    {
+        int others = 48;   // header padding and the gap kept between the pages and the search field
+        for (QAction *action : asConst(header->actions()))
+        {
+            const QWidget *widget = header->widgetForAction(action);
+            if (!widget || !action->isVisible() || (widget == m_columnFilterWidget) || (widget == headerSpacer))
+                continue;
+            others += widget->sizeHint().width() + header->layout()->spacing();
+        }
+
+        // In steps: a narrower field, then no "search in" selector, then no field at all.
+        const int minField = 110;
+        const int selector = m_columnFilterComboBox->sizeHint().width() + m_columnFilterWidget->layout()->spacing();
+        const int room = header->width() - others;
+        const bool showSelector = (room >= (minField + selector));
+        const bool showField = (room >= minField);
+        if (m_columnFilterComboBox->isHidden() == showSelector)
+            m_columnFilterComboBox->setVisible(showSelector);
+        if (m_columnFilterEdit->isHidden() == showField)
+            m_columnFilterEdit->setVisible(showField);
+        const int width = std::clamp((room - (showSelector ? selector : 0)), minField, 300);
+        if (m_columnFilterEdit->width() != width)
+            m_columnFilterEdit->setFixedWidth(width);
+
+        // Below this the header could not hold the pages, Add, the quick toggles and the menu.
+        // (The margin covers what the toolbar keeps for itself; found by trying narrower windows.)
+        if (const int minimum = others + 40; minimumWidth() != minimum)
+            setMinimumWidth(minimum);
+    };
+    header->installEventFilter(new ResizeWatcher(fitSearchField, header));
+    fitSearchField();
 
     // The header replaces the classic toolbar; hiding it would remove navigation and search.
     m_ui->actionTopToolBar->setVisible(false);

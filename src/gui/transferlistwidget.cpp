@@ -27,6 +27,7 @@
  * exception statement from your version.
  */
 
+#include "modern/modernappearance.h"
 #include "transferlistwidget.h"
 
 #include <algorithm>
@@ -180,6 +181,21 @@ TransferListWidget::TransferListWidget(IGUIApplication *app, QWidget *parent)
     };
     connect(Hybrid::HybridManager::instance(), &Hybrid::HybridManager::settingsChanged, this, syncSourceColumn);
     QMetaObject::invokeMethod(this, syncSourceColumn, Qt::QueuedConnection);
+
+    // The name is what a row is read by, yet the stock default gives every column the same width
+    // and leaves it showing a few letters. Once, give it room; after that the widths are the user's.
+    QMetaObject::invokeMethod(this, [this]
+    {
+        SettingValue<bool> sized {u"GUI/ModernNameColumnSized"_s};
+        if (!ModernAppearance::isActive() || sized.get(false))
+            return;
+        if (columnWidth(TransferListModel::TR_NAME) < 320)
+            setColumnWidth(TransferListModel::TR_NAME, 320);
+        if (columnWidth(TransferListModel::TR_SOURCE) > 240)
+            setColumnWidth(TransferListModel::TR_SOURCE, 240);
+        sized = true;
+        saveSettings();
+    }, Qt::QueuedConnection);
 
     // Default hidden columns
     if (!columnLoaded)

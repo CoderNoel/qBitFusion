@@ -38,11 +38,15 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFuture>
 #include <QList>
 #include <QMenu>
 #include <QGroupBox>
+#include <QLabel>
+#include <QHeaderView>
+#include <QScrollBar>
 #include <QMessageBox>
 #include <QVBoxLayout>
 #include <QPushButton>
@@ -73,7 +77,9 @@
 #include "filterpatternformatmenu.h"
 #include "hybrid/hybridwidgets.h"
 #include "lineedit.h"
+#include "modern/modernappearance.h"
 #include "torrenttagsdialog.h"
+#include "uithememanager.h"
 
 #include "ui_addnewtorrentdialog.h"
 
@@ -177,11 +183,11 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::TorrentDescriptor &to
     : QDialog(parent)
     , m_ui {new Ui::AddNewTorrentDialog}
     , m_filterLine {new LineEdit(this)}
-    , m_storeDialogSize {SETTINGS_KEY(u"DialogSize"_s)}
+    , m_storeDialogSize {SETTINGS_KEY(u"Size"_s)}
     , m_storeDefaultCategory {SETTINGS_KEY(u"DefaultCategory"_s)}
     , m_storeRememberLastSavePath {SETTINGS_KEY(u"RememberLastSavePath"_s)}
     , m_storeTreeHeaderState {u"GUI/Qt6/" SETTINGS_KEY(u"TreeHeaderState"_s)}
-    , m_storeSplitterState {u"GUI/Qt6/" SETTINGS_KEY(u"SplitterState"_s)}
+    , m_storeSplitterState {u"GUI/Qt6/" SETTINGS_KEY(u"SplitState"_s)}
     , m_storeFilterPatternFormat {u"GUI/" SETTINGS_KEY(u"FilterPatternFormat"_s)}
 {
     m_ui->setupUi(this);
@@ -214,7 +220,7 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::TorrentDescriptor &to
     m_filterLine->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_filterLine->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_filterLine, &QWidget::customContextMenuRequested, this, &AddNewTorrentDialog::showContentFilterContextMenu);
-    m_ui->contentFilterLayout->insertWidget(3, m_filterLine);
+    m_ui->contentFilterLayout->insertWidget(0, m_filterLine, 1);
     const auto *focusSearchHotkey = new QShortcut(QKeySequence::Find, this);
     connect(focusSearchHotkey, &QShortcut::activated, this, [this]()
     {
@@ -232,8 +238,35 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::TorrentDescriptor &to
     m_ui->contentTreeView->hideColumn(TorrentContentWidget::Availability);
     m_ui->contentTreeView->setColumnsVisibilityMode(TorrentContentWidget::ColumnsVisibilityMode::Locked);
     m_ui->contentTreeView->setDoubleClickAction(TorrentContentWidget::DoubleClickAction::Rename);
+    // The file name takes whatever width the other two columns leave, so it is never cut down to
+    // a few letters and the tree needs no horizontal scrolling.
+    m_ui->contentTreeView->header()->setStretchLastSection(false);
+    m_ui->contentTreeView->header()->setSectionResizeMode(TorrentContentWidget::Name, QHeaderView::Stretch);
+    m_ui->contentTreeView->header()->setSectionResizeMode(TorrentContentWidget::Size, QHeaderView::ResizeToContents);
+    // The priority column's own hint is as wide as its editor; the header text is what has to fit.
+    m_ui->contentTreeView->header()->setSectionResizeMode(TorrentContentWidget::Priority, QHeaderView::Interactive);
+    const QFontMetrics headerMetrics {m_ui->contentTreeView->header()->font()};
+    m_ui->contentTreeView->header()->resizeSection(TorrentContentWidget::Priority
+            , headerMetrics.horizontalAdvance(m_ui->contentTreeView->model()->headerData(TorrentContentWidget::Priority, Qt::Horizontal).toString()) + 28);
 
     setupHybridSource();
+
+    // The options scroll on their own next to the file list. Their column is never narrower than
+    // its content, and never squeezed below its natural height: it scrolls instead.
+    m_ui->scrollArea_2->viewport()->setAutoFillBackground(false);
+    m_ui->torrentoptionsFrame->setAutoFillBackground(false);
+    m_ui->mainlayout_addui->setSpacing(8);
+    m_ui->splitter->setStretchFactor(0, 3);
+    m_ui->splitter->setStretchFactor(1, 2);
+    alignFormLabels();
+    m_ui->torrentoptionsFrame->installEventFilter(this);
+    updateOptionsColumnSize();
+
+    if (ModernAppearance::isActive())
+    {
+        m_ui->tagsEditButton->setIcon(UIThemeManager::instance()->getIcon(u"tags"_s));
+        m_ui->tagsEditButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    }
 
     connect(m_ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(m_ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -287,7 +320,42 @@ void AddNewTorrentDialog::loadState()
     if (const QSize dialogSize = m_storeDialogSize; dialogSize.isValid())
         resize(dialogSize);
 
-    m_ui->splitter->restoreState(m_storeSplitterState);
+    if (const QByteArray state = m_storeSplitterState; !state.isEmpty())
+        m_ui->splitter->restoreState(state);
+    else
+        m_ui->splitter->setSizes({(width() * 58) / 100, (width() * 42) / 100});
+}
+
+void AddNewTorrentDialog::alignFormLabels()
+{
+    // One label column for both groups, so their fields start at the same position.
+    const QList<QLabel *> labels {m_ui->labelTorrentManagementMode, m_ui->labelSavePath, m_ui->labelCategory
+        , m_ui->tagsLabel, m_ui->contentLayoutLabel, m_ui->stopConditionLabel};
+    int width = 0;
+    for (const QLabel *label : labels)
+        width = std::max(width, label->sizeHint().width());
+    for (QLabel *label : labels)
+        label->setMinimumWidth(width);
+}
+
+void AddNewTorrentDialog::updateOptionsColumnSize()
+{
+    QWidget *content = m_ui->torrentoptionsFrame;
+    const QSize hint = content->layout()->totalSizeHint();
+    if (content->minimumHeight() != hint.height())
+        content->setMinimumHeight(hint.height());
+
+    const int scrollBarWidth = m_ui->scrollArea_2->verticalScrollBar()->sizeHint().width();
+    const int width = content->layout()->totalMinimumSize().width() + scrollBarWidth;
+    if (m_ui->scrollArea_2->minimumWidth() != width)
+        m_ui->scrollArea_2->setMinimumWidth(width);
+}
+
+bool AddNewTorrentDialog::eventFilter(QObject *watched, QEvent *event)
+{
+    if ((watched == m_ui->torrentoptionsFrame) && (event->type() == QEvent::LayoutRequest))
+        updateOptionsColumnSize();
+    return QDialog::eventFilter(watched, event);
 }
 
 void AddNewTorrentDialog::saveState()
@@ -521,6 +589,16 @@ void AddNewTorrentDialog::onUseDownloadPathChanged(const bool checked)
 {
     m_useDownloadPath = checked;
     m_ui->downloadPath->setCurrentIndex(checked ? m_downloadPathIndex : -1);
+    updateDownloadPathVisibility();
+}
+
+void AddNewTorrentDialog::updateDownloadPathVisibility()
+{
+    // Switched off, the group is only its title: one check box row, with no gap left for the field.
+    const bool checked = m_ui->groupBoxDownloadPath->isChecked();
+    m_ui->downloadPath->setVisible(checked);
+    m_ui->groupBoxDownloadPath->setMaximumHeight(checked ? QWIDGETSIZE_MAX
+            : std::max(m_ui->checkBoxRememberLastSavePath->sizeHint().height(), 26));
 }
 
 void AddNewTorrentDialog::categoryChanged([[maybe_unused]] const int index)
@@ -537,6 +615,7 @@ void AddNewTorrentDialog::categoryChanged([[maybe_unused]] const int index)
         m_ui->downloadPath->setSelectedPath(downloadPath);
 
         m_ui->groupBoxDownloadPath->setChecked(!m_ui->downloadPath->selectedPath().isEmpty());
+        updateDownloadPathVisibility();
 
         updateDiskSpaceLabel();
     }
@@ -670,11 +749,13 @@ void AddNewTorrentDialog::populateSavePaths()
     {
         m_ui->downloadPath->setCurrentIndex(m_useDownloadPath ? std::min(m_downloadPathIndex, (m_ui->downloadPath->count() - 1)) : -1);
         m_ui->groupBoxDownloadPath->setChecked(m_useDownloadPath);
+        updateDownloadPathVisibility();
     }
     else
     {
         const bool useDownloadPath = addTorrentParams.useDownloadPath.value_or(btSession->isDownloadPathEnabled());
         m_ui->groupBoxDownloadPath->setChecked(useDownloadPath);
+        updateDownloadPathVisibility();
 
         if (!addTorrentParams.downloadPath.isEmpty())
             setPath(m_ui->downloadPath, addTorrentParams.downloadPath);
@@ -700,6 +781,7 @@ void AddNewTorrentDialog::setupHybridSource()
 
     auto *group = new QGroupBox(tr("Download source"), this);
     auto *layout = new QVBoxLayout(group);
+    layout->setContentsMargins(0, 4, 0, 4);
     m_sourcePicker = new HybridGui::SourcePicker(group);
     m_sourcePicker->setSelection(manager->defaultPolicy(), manager->defaultP2PConsent());
     layout->addWidget(m_sourcePicker);
@@ -902,18 +984,28 @@ void AddNewTorrentDialog::setupTreeview()
     updateDiskSpaceLabel();
 }
 
+void AddNewTorrentDialog::setSavePathControlsEnabled(const bool enabled)
+{
+    // Everything in the group except the management mode itself, which lives there too.
+    for (QWidget *widget : {static_cast<QWidget *>(m_ui->labelSavePath), static_cast<QWidget *>(m_ui->savePath)
+            , static_cast<QWidget *>(m_ui->groupBoxDownloadPath), static_cast<QWidget *>(m_ui->checkBoxRememberLastSavePath)})
+    {
+        widget->setEnabled(enabled);
+    }
+}
+
 void AddNewTorrentDialog::TMMChanged(int index)
 {
     if (index != 1)
     { // 0 is Manual mode and 1 is Automatic mode. Handle all non 1 values as manual mode.
         populateSavePaths();
-        m_ui->groupBoxSavePath->setEnabled(true);
+        setSavePathControlsEnabled(true);
     }
     else
     {
         const auto *session = BitTorrent::Session::instance();
 
-        m_ui->groupBoxSavePath->setEnabled(false);
+        setSavePathControlsEnabled(false);
 
         m_ui->savePath->blockSignals(true);
         m_ui->savePath->clear();
@@ -927,6 +1019,7 @@ void AddNewTorrentDialog::TMMChanged(int index)
 
         m_ui->groupBoxDownloadPath->blockSignals(true);
         m_ui->groupBoxDownloadPath->setChecked(!downloadPath.isEmpty());
+        updateDownloadPathVisibility();
     }
 
     updateDiskSpaceLabel();

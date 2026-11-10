@@ -21,6 +21,7 @@ public static class QbfCapture {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
   public static List<IntPtr> Windows(uint target) {
     var r = new List<IntPtr>();
     EnumWindows((h, l) => { uint pid; GetWindowThreadProcessId(h, out pid);
@@ -31,6 +32,10 @@ public static class QbfCapture {
   public static string Title(IntPtr h) { var sb = new StringBuilder(256); GetWindowText(h, sb, 256); return sb.ToString(); }
 }
 '@
+
+# Per-monitor DPI aware (v2), so window rectangles are in physical pixels whatever the host shell is.
+# Without it a scaled display gives a bitmap sized in logical pixels and the capture is cropped.
+[void][QbfCapture]::SetThreadDpiAwarenessContext([IntPtr](-4))
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $i = 0

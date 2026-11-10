@@ -127,4 +127,11 @@ namespace Modern
 
     // Applies FilterRowDelegate and the sidebar look to every filter list inside a sidebar widget.
     void styleSidebarViews(QWidget *sidebar);
+
+    // Sections are drawn without a box (title, hairline, content), so what a group box holds starts
+    // at the title's left edge instead of being inset as if there were a frame around it.
+    void flattenSections(QWidget *root);
+
+    // Marks a label as secondary text (muted colour).
+    void markAsHint(QLabel *label);
 }

@@ -131,7 +131,8 @@ StatusBar::StatusBar(QWidget *parent)
     m_connecStatusLblIcon->setIconSize(smallIconSize);
     m_dlSpeedLbl->setIconSize(smallIconSize);
     m_upSpeedLbl->setIconSize(smallIconSize);
-    m_altSpeedsBtn->setIconSize({midIconSize.width(), smallIconSize.height()});
+    // Upstream's "slow" artwork is wide; the modern glyph is square like the others.
+    m_altSpeedsBtn->setIconSize(ModernAppearance::isActive() ? smallIconSize : QSize(midIconSize.width(), smallIconSize.height()));
 
     addPermanentWidget(m_freeDiskSpaceLbl);
     addPermanentWidget(m_freeDiskSpaceSeparator);

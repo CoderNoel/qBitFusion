@@ -44,6 +44,7 @@
 #include "base/unicodestrings.h"
 #include "gui/desktopintegration.h"
 #include "gui/mainwindow.h"
+#include "gui/modern/modernappearance.h"
 #include "interfaces/iguiapplication.h"
 
 namespace
@@ -213,6 +214,23 @@ AdvancedSettings::AdvancedSettings(IGUIApplication *app, QWidget *parent)
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     // Load settings
     loadAdvancedSettings();
+    if (ModernAppearance::isActive())
+    {
+        // Rows tall enough for a styled editor, and headers aligned with what is under them.
+        verticalHeader()->setDefaultSectionSize(fontMetrics().height() + 20);
+        horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        for (const int row : {static_cast<int>(QBITTORRENT_HEADER), static_cast<int>(LIBTORRENT_HEADER)})
+            static_cast<QLabel *>(cellWidget(row, PROPERTY))->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        for (int row = 0; row < rowCount(); ++row)
+        {
+            if (auto *label = qobject_cast<QLabel *>(cellWidget(row, PROPERTY)))
+                label->setContentsMargins(8, 0, 8, 0);
+            if (auto *value = qobject_cast<QLabel *>(cellWidget(row, VALUE)))
+                value->setContentsMargins(8, 0, 8, 0);
+            if (auto *check = qobject_cast<QCheckBox *>(cellWidget(row, VALUE)))
+                check->setContentsMargins(8, 0, 8, 0);
+        }
+    }
     resizeColumnToContents(0);
     horizontalHeader()->setStretchLastSection(true);
 }

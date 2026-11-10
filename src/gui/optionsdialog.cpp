@@ -205,13 +205,26 @@ OptionsDialog::OptionsDialog(IGUIApplication *app, QWidget *parent)
 #endif
     m_ui->tabSelection->item(TAB_ADVANCED)->setIcon(UIThemeManager::instance()->getIcon(u"preferences-advanced"_s, u"preferences-other"_s));
 
+    if (ModernAppearance::isActive())
+    {
+        // Rows with the icon beside the label instead of tall icon-over-text tiles.
+        m_ui->tabSelection->setViewMode(QListView::ListMode);
+        m_ui->tabSelection->setMovement(QListView::Static);
+        m_ui->tabSelection->setFlow(QListView::TopToBottom);
+        m_ui->tabSelection->setWrapping(false);
+        m_ui->tabSelection->setIconSize({18, 18});
+        m_ui->tabSelection->setSpacing(0);
+        for (QLabel *hint : {m_ui->labelRestartRequired, m_ui->labelStyleHint, m_ui->labelProxyTypeUnavailable})
+            Modern::markAsHint(hint);
+    }
+
     // set uniform size for all icons
     int maxHeight = -1;
     for (int i = 0; i < m_ui->tabSelection->count(); ++i)
         maxHeight = std::max(maxHeight, m_ui->tabSelection->visualItemRect(m_ui->tabSelection->item(i)).size().height());
     for (int i = 0; i < m_ui->tabSelection->count(); ++i)
     {
-        const QSize size(std::numeric_limits<int>::max(), static_cast<int>(maxHeight * 1.2));
+        const QSize size(std::numeric_limits<int>::max(), (ModernAppearance::isActive() ? 36 : static_cast<int>(maxHeight * 1.2)));
         m_ui->tabSelection->item(i)->setSizeHint(size);
     }
 
@@ -255,6 +268,9 @@ OptionsDialog::OptionsDialog(IGUIApplication *app, QWidget *parent)
     m_advancedSettings = new AdvancedSettings(app, m_ui->tabAdvancedPage);
     m_ui->advPageLayout->addWidget(m_advancedSettings);
     connect(m_advancedSettings, &AdvancedSettings::settingsChanged, this, &ThisType::enableApplyButton);
+
+    if (ModernAppearance::isActive())
+        Modern::flattenSections(this);
 
     // setup apply button
     m_applyButton->setEnabled(false);
@@ -1139,6 +1155,8 @@ void OptionsDialog::loadSpeedTabOptions()
     const auto *session = BitTorrent::Session::instance();
 
     m_ui->labelGlobalRate->setPixmap(UIThemeManager::instance()->getScaledPixmap(u"slow_off"_s, Utils::Gui::mediumIconSize(this).height()));
+    m_ui->labelGlobalRate->setVisible(!ModernAppearance::isActive());
+    m_ui->labelAltRate->setVisible(!ModernAppearance::isActive());
     m_ui->spinUploadLimit->setValue(session->globalUploadSpeedLimit() / 1024);
     m_ui->spinDownloadLimit->setValue(session->globalDownloadSpeedLimit() / 1024);
 
@@ -1700,7 +1718,7 @@ void OptionsDialog::changePage(QListWidgetItem *current, QListWidgetItem *previo
 void OptionsDialog::loadSplitterState()
 {
     // width has been modified, use height as width reference instead
-    const int width = m_ui->tabSelection->item(TAB_UI)->sizeHint().height() * 2;
+    const int width = ModernAppearance::isActive() ? 190 : (m_ui->tabSelection->item(TAB_UI)->sizeHint().height() * 2);
     const QStringList defaultSizes = {QString::number(width), QString::number(m_ui->hsplitter->width() - width)};
 
     QList<int> splitterSizes;

@@ -189,7 +189,9 @@ namespace
 
         QSize actualSize(const QSize &size, QIcon::Mode, QIcon::State) override
         {
-            return size;
+            // The glyphs are square; a wider or taller request gets the largest square that fits.
+            const int side = std::min(size.width(), size.height());
+            return {side, side};
         }
 
         QList<QSize> availableSizes(QIcon::Mode, QIcon::State) override
@@ -232,7 +234,8 @@ namespace
                     painter.setRenderHint(QPainter::Antialiasing);
                     if (mode == QIcon::Disabled)
                         painter.setOpacity(0.38);
-                    renderer.render(&painter, QRectF(QPointF(0, 0), QSizeF(devSize)));
+                    const qreal side = std::min(devSize.width(), devSize.height());
+                    renderer.render(&painter, QRectF((devSize.width() - side) / 2, (devSize.height() - side) / 2, side, side));
                 }
                 result = QPixmap::fromImage(image);
                 QPixmapCache::insert(cacheKey, result);
@@ -486,6 +489,7 @@ void ModernAppearance::apply(const bool dark)
     sheet.replace(u"@hover@"_s, dark ? u"rgba(255, 255, 255, 0.05)"_s : u"rgba(0, 0, 0, 0.04)"_s);
     sheet.replace(u"@hoverStrong@"_s, dark ? u"rgba(255, 255, 255, 0.085)"_s : u"rgba(0, 0, 0, 0.065)"_s);
     sheet.replace(u"@selection@"_s, rgba(s.highlight, selectionAlpha()));
+    sheet.replace(u"@selectionStrong@"_s, rgba(s.highlight, dark ? 0.42 : 0.30));
     sheet.replace(u"@selectionInactive@"_s, dark ? u"rgba(255, 255, 255, 0.11)"_s : u"rgba(0, 0, 0, 0.085)"_s);
     sheet.replace(u"@selectionText@"_s, s.text.name());
     sheet.replace(u"@primaryBg@"_s, dark ? u"#ececec"_s : u"#1a1a1a"_s);
@@ -553,19 +557,23 @@ void ModernAppearance::paintProgress(QPainter *painter, const QRect &cellRect, c
 
     if (showBar)
     {
-        const qreal height = 4;
+        const qreal height = 6;
         const QRectF track {static_cast<qreal>(content.left()), content.center().y() - (height / 2) + 0.5
             , static_cast<qreal>(content.width() - textWidth - 10), height};
+        // The track is drawn from the text colour so that it stays visible on a selected (tinted) row.
+        QColor trackColor = pal.color(QPalette::Text);
+        trackColor.setAlphaF(g_dark ? 0.16 : 0.12);
         painter->setPen(Qt::NoPen);
-        painter->setBrush(pal.color(QPalette::Mid));
+        painter->setBrush(trackColor);
         painter->drawRoundedRect(track, height / 2, height / 2);
 
         const qreal ratio = std::clamp(progress, 0, 100) / 100.0;
         if (ratio > 0)
         {
-            QColor fillColor = fill.isValid() ? fill : ((progress >= 100) ? color(Tone::Success) : pal.color(QPalette::Highlight));
+            // Not the palette's Highlight: inside an item view that role is the dim selection tint.
+            QColor fillColor = fill.isValid() ? fill : color((progress >= 100) ? Tone::Success : Tone::Accent);
             if (!enabled)
-                fillColor = pal.color(QPalette::Dark);
+                fillColor = color(Tone::Muted);
             painter->setBrush(fillColor);
             painter->drawRoundedRect(QRectF(track.left(), track.top(), std::max(track.width() * ratio, height), height)
                 , height / 2, height / 2);

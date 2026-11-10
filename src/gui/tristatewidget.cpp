@@ -28,13 +28,31 @@
 
 #include "tristatewidget.h"
 
+#include <algorithm>
+
 #include <QApplication>
+#include <QFontMetrics>
+#include <QList>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QPen>
 #include <QString>
 #include <QStyle>
 #include <QStyleOptionMenuItem>
+
+#include "gui/modern/modernappearance.h"
+
+namespace
+{
+    // Geometry of a modern menu row (see QMenu::item in modern.qss), so this custom item lines up
+    // with the ordinary ones around it.
+    constexpr int ROW_PADDING = 6;
+    constexpr int BOX_LEFT = 6;
+    constexpr int BOX_SIZE = 16;
+    constexpr int TEXT_LEFT = 30;
+    constexpr int RIGHT_PADDING = 28;
+}
 
 TriStateWidget::TriStateWidget(const QString &text, QWidget *parent)
     : QWidget {parent}
@@ -56,6 +74,13 @@ void TriStateWidget::setCloseOnInteraction(const bool enabled)
 
 QSize TriStateWidget::minimumSizeHint() const
 {
+    if (ModernAppearance::isActive())
+    {
+        // Measured and drawn with the menu font, like the items around it.
+        const QSize textSize = QFontMetrics(QApplication::font("QMenu")).size(Qt::TextSingleLine, m_text);
+        return {(TEXT_LEFT + textSize.width() + RIGHT_PADDING), (std::max(textSize.height(), 17) + (2 * ROW_PADDING))};
+    }
+
     QStyleOptionMenuItem opt;
     opt.initFrom(this);
     opt.menuHasCheckableItems = true;
@@ -65,6 +90,54 @@ QSize TriStateWidget::minimumSizeHint() const
 
 void TriStateWidget::paintEvent(QPaintEvent *)
 {
+    if (ModernAppearance::isActive())
+    {
+        // The base style would draw a stock check mark here: a stylesheet's menu rules only reach
+        // a QMenu's own items, not a widget placed in one.
+        QPainter painter {this};
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setFont(QApplication::font("QMenu"));
+        const QPalette pal = palette();
+
+        if (hasFocus() || rect().contains(mapFromGlobal(QCursor::pos())))
+        {
+            QColor hover = pal.color(QPalette::WindowText);
+            hover.setAlphaF(0.085);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(hover);
+            painter.drawRoundedRect(rect(), 5, 5);
+        }
+
+        const QRectF box {BOX_LEFT + 0.5, ((height() - BOX_SIZE) / 2.0) + 0.5, BOX_SIZE - 1.0, BOX_SIZE - 1.0};
+        if (m_checkState == Qt::Unchecked)
+        {
+            painter.setPen(QPen(pal.color(QPalette::Dark), 1));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRoundedRect(box, 4, 4);
+        }
+        else
+        {
+            const QColor accent = ModernAppearance::color(ModernAppearance::Tone::Accent);
+            painter.setPen(QPen(accent, 1));
+            painter.setBrush(accent);
+            painter.drawRoundedRect(box, 4, 4);
+
+            QPen mark {pal.color(QPalette::HighlightedText), 1.7};
+            mark.setCapStyle(Qt::RoundCap);
+            mark.setJoinStyle(Qt::RoundJoin);
+            painter.setPen(mark);
+            const QPointF c = box.center();
+            if (m_checkState == Qt::Checked)
+                painter.drawPolyline(QList<QPointF> {{c.x() - 3.6, c.y() + 0.2}, {c.x() - 1.1, c.y() + 2.7}, {c.x() + 3.8, c.y() - 2.6}});
+            else
+                painter.drawLine(QPointF(c.x() - 3.2, c.y()), QPointF(c.x() + 3.2, c.y()));
+        }
+
+        painter.setPen(pal.color(isEnabled() ? QPalette::WindowText : QPalette::PlaceholderText));
+        painter.drawText(QRect(TEXT_LEFT, 0, std::max(0, width() - TEXT_LEFT - 8), height()), (Qt::AlignVCenter | Qt::AlignLeft), m_text);
+        return;
+    }
+
     QStyleOptionMenuItem opt;
     opt.initFrom(this);
     opt.menuItemType = QStyleOptionMenuItem::Normal;

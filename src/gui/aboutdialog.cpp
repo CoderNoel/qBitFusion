@@ -37,6 +37,7 @@
 #include "base/utils/misc.h"
 #include "base/version.h"
 #include "ui_aboutdialog.h"
+#include "modern/modernappearance.h"
 #include "uithememanager.h"
 #include "utils.h"
 
@@ -83,7 +84,10 @@ AboutDialog::AboutDialog(QWidget *parent)
                 "The links below are for qBittorrent itself."));
     m_ui->labelAbout->setText(aboutText);
 
-    m_ui->labelMascot->setPixmap(Utils::Gui::scaledPixmap(Path(u":/icons/mascot.png"_s)));
+    if (ModernAppearance::isActive())
+        m_ui->labelMascot->setPixmap(UIThemeManager::instance()->getScaledPixmap(u"qbittorrent"_s, 96));
+    else
+        m_ui->labelMascot->setPixmap(Utils::Gui::scaledPixmap(Path(u":/icons/mascot.png"_s)));
 
     // Thanks
     if (const auto readResult = Utils::IO::readFile(Path(u":/thanks.html"_s), -1, QIODevice::Text))

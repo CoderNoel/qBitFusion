@@ -98,6 +98,11 @@ private:
     void populateSavePaths();
     void loadState();
     void saveState();
+    void alignFormLabels();
+    void updateOptionsColumnSize();
+    void setSavePathControlsEnabled(bool enabled);
+    void updateDownloadPathVisibility();
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void setMetadataProgressIndicator(bool visibleIndicator, const QString &labelText = {});
     void setupHybridSource();
     void setupTreeview();

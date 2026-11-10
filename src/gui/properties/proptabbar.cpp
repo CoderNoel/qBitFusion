@@ -35,6 +35,7 @@
 #include <QStyle>
 
 #include "base/global.h"
+#include "gui/modern/modernappearance.h"
 #include "gui/uithememanager.h"
 
 namespace
@@ -101,8 +102,9 @@ PropTabBar::PropTabBar(QWidget *parent)
     filesButton->setShortcut(Qt::ALT | Qt::Key_Z);
     addWidget(filesButton);
     m_btnGroup->addButton(filesButton, FilesTab);
-    // Spacer
-    addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
+    // Spacer (classic look only: the modern tab bar keeps all its tabs together)
+    if (!ModernAppearance::isActive())
+        addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
     // Speed tab
     QPushButton *speedButton = new QPushButton(
 #ifndef Q_OS_MACOS
@@ -112,6 +114,8 @@ PropTabBar::PropTabBar(QWidget *parent)
     speedButton->setShortcut(Qt::ALT | Qt::Key_D);
     addWidget(speedButton);
     m_btnGroup->addButton(speedButton, SpeedTab);
+    if (ModernAppearance::isActive())
+        addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
     // qBitFusion: lets the modern stylesheet render these as a segmented tab bar.
     for (QAbstractButton *button : m_btnGroup->buttons())
         button->setProperty("qbfPropTab", true);

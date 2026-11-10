@@ -55,6 +55,7 @@
 #include "gui/filterpatternformatmenu.h"
 #include "gui/lineedit.h"
 #include "gui/modern/modernappearance.h"
+#include "gui/modern/modernwidgets.h"
 #include "gui/trackerlist/trackerlistwidget.h"
 #include "gui/uithememanager.h"
 #include "gui/utils.h"
@@ -132,8 +133,20 @@ PropertiesWidget::PropertiesWidget(QWidget *parent)
     m_tabBar = new PropTabBar(nullptr);
     m_tabBar->setContentsMargins(0, 5, 0, 5);
     if (ModernAppearance::isActive())
+    {
+        m_tabBar->setContentsMargins(8, 5, 8, 5);
         m_ui->verticalLayout->insertLayout(0, m_tabBar);   // tabs above their content
-    else
+
+        // Field names step back so that the values are what the eye lands on.
+        const QList<QLabel *> labels = m_ui->scrollAreaWidgetContents->findChildren<QLabel *>();
+        for (QLabel *label : labels)
+        {
+            if (!label->objectName().endsWith(u"Val"))
+                Modern::markAsHint(label);
+        }
+        m_ui->lineBelowBars->hide();   // the "Transfer" section brings its own rule
+    }
+    if (!ModernAppearance::isActive())
         m_ui->verticalLayout->addLayout(m_tabBar);
     connect(m_tabBar, &PropTabBar::tabChanged, m_ui->stackedProperties, &QStackedWidget::setCurrentIndex);
     connect(m_tabBar, &PropTabBar::tabChanged, this, &PropertiesWidget::saveSettings);
@@ -162,7 +175,7 @@ void PropertiesWidget::showPiecesAvailability(bool show)
     m_piecesAvailability->setVisible(show);
     m_ui->labelAverageAvailabilityVal->setVisible(show);
     if (show || !m_downloadedPieces->isVisible())
-        m_ui->lineBelowBars->setVisible(show);
+        m_ui->lineBelowBars->setVisible(show && !ModernAppearance::isActive());
 }
 
 void PropertiesWidget::showPiecesDownloaded(bool show)
@@ -171,7 +184,7 @@ void PropertiesWidget::showPiecesDownloaded(bool show)
     m_downloadedPieces->setVisible(show);
     m_ui->labelProgressVal->setVisible(show);
     if (show || !m_piecesAvailability->isVisible())
-        m_ui->lineBelowBars->setVisible(show);
+        m_ui->lineBelowBars->setVisible(show && !ModernAppearance::isActive());
 }
 
 void PropertiesWidget::setVisibility(const bool visible)

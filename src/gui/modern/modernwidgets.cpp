@@ -36,6 +36,7 @@
 #include <QApplication>
 #include <QColorDialog>
 #include <QEvent>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPainter>
@@ -317,7 +318,11 @@ void Modern::FilterRowDelegate::paint(QPainter *painter, const QStyleOptionViewI
     if (selected || hovered)
     {
         painter->setPen(Qt::NoPen);
-        painter->setBrush(selected ? selectionFill(pal) : withAlpha(pal.color(QPalette::Text), 0.05));
+        // Every filter list always has a selected row. Only one that narrows the list gets the
+        // accent tint; "All" (the first row), selected, is the resting state and stays neutral.
+        const bool narrows = selected && (index.row() > 0);
+        painter->setBrush(narrows ? selectionFill(pal)
+                : withAlpha(pal.color(QPalette::Text), (selected ? 0.075 : 0.05)));
         painter->drawRoundedRect(QRectF(row), RADIUS, RADIUS);
     }
 
@@ -506,4 +511,24 @@ void Modern::styleSidebarViews(QWidget *sidebar)
         view->style()->polish(view);
         view->updateGeometry();   // these lists size themselves to their rows
     }
+}
+
+void Modern::flattenSections(QWidget *root)
+{
+    const QList<QGroupBox *> boxes = root->findChildren<QGroupBox *>();
+    for (QGroupBox *box : boxes)
+    {
+        if (QLayout *layout = box->layout())
+        {
+            const QMargins margins = layout->contentsMargins();
+            layout->setContentsMargins(0, std::min(margins.top(), 6), 0, std::min(margins.bottom(), 6));
+        }
+    }
+}
+
+void Modern::markAsHint(QLabel *label)
+{
+    label->setProperty("qbfHint", true);
+    label->style()->unpolish(label);
+    label->style()->polish(label);
 }

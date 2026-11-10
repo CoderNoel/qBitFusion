@@ -58,6 +58,7 @@
 #include "torrentcontentmodelfile.h"
 #include "torrentcontentmodelfolder.h"
 #include "torrentcontentmodelitem.h"
+#include "modern/modernappearance.h"
 #include "uithememanager.h"
 
 #ifdef Q_OS_MACOS
@@ -400,6 +401,13 @@ QVariant TorrentContentModel::data(const QModelIndex &index, const int role) con
     case Qt::DecorationRole:
         if (index.column() != TorrentContentModelItem::COL_NAME)
             return {};
+
+        if (ModernAppearance::isActive())
+        {
+            // The app's own line icons instead of the system's coloured file-type icons.
+            const bool isFolder = (item->itemType() == TorrentContentModelItem::FolderType);
+            return UIThemeManager::instance()->getIcon(isFolder ? u"directory"_s : u"fileicon"_s);
+        }
 
         if (item->itemType() == TorrentContentModelItem::FolderType)
             return m_fileIconProvider->icon(QFileIconProvider::Folder);

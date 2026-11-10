@@ -54,7 +54,7 @@
 
 ## Risks / unknowns / unverified claims
 
-1. **Real-Debrid has one live run only** (2026-11-11, the user's account and one torrent; details in `DECISIONS.md`). It reached `HTTP_ACTIVE` and verified pieces at about 10 MiB/s with no peers connected. Seen to hold in that run: the `real-debrid.com` download host suffix, the `/torrents` list-by-hash lookup, one link for one selected file. Not observed: a whole torrent completing, several selected files (the `links` order), link expiry mid-transfer, the OAuth refresh. A link is now accepted on exact size when that size is unique among the selected files; the name is required only to tell equal-sized files apart. Download servers answered `503` repeatedly for one link and mishandled a 1-byte range; the fixes for both went in together, so which one mattered is not established.
+1. **Real-Debrid has one live run only** (2026-11-11, the user's account and one torrent; details in `DECISIONS.md`). It reached `HTTP_ACTIVE` and verified pieces at about 10 MiB/s with no peers connected. Seen to hold in that run: the `real-debrid.com` download host suffix, the `/torrents` list-by-hash lookup, one link for one selected file. The same torrent later completed over HTTPS (`HTTP_ACTIVE -> COMPLETED (download_complete)` in the app log, 2026-11-11 04:48). Not observed: several selected files (the `links` order), link expiry mid-transfer, the OAuth refresh. A link is now accepted on exact size when that size is unique among the selected files; the name is required only to tell equal-sized files apart. Download servers answered `503` repeatedly for one link and mishandled a 1-byte range; the fixes for both went in together, so which one mattered is not established.
 2. **TorBox not implemented**: official docs could not be read (JavaScript-only pages).
 3. **G4 is not release-proven**: no packet capture, DHT-enabled session or WebUI/RSS/watch-folder add paths tested. Those paths do pass through `addTorrent_impl` and the hold hook.
 4. A recheck of a *held* torrent may not progress if libtorrent refuses to check paused torrents. Untested.
@@ -66,6 +66,8 @@
 
 10. Cosmetic, hybrid only: the "Downloaded" and "this session" totals do not count bytes received over HTTPS (seen live: 67.3% of 80 GiB verified, "Downloaded: 9.16 GiB (0 B this session)"). The ETA now adds the HTTPS rate; it has no test of its own. Checked once in the installed copy by screenshot (2026-11-11): 8.3 MiB/s, 32.7% of 80.43 GiB left, ETA 53m.
 11. The Source column is moved next to Status once, the first time the feature is in use (`GUI/HybridSourceColumnPlaced`). Checked in the installed copy by screenshot.
+
+12. UI polish pass (2026-11-11), checked by screenshot in the test build at 150% scaling, dark scheme only: list progress bar, status-bar speed-limit icon, add-torrent dialog, header at narrow widths, menus, sidebar, properties panel, Options pages (Behavior, Downloads, Hybrid sources, Speed, Advanced). Changed but not checked by screenshot: Statistics, Torrent Creator, About, delete confirmation, download-from-URL, RSS warning, sliders, the light scheme. Known and left: Title Case labels inherited from upstream, uneven label/field alignment inside some Options rows, last column cut on the Trackers and Peers tabs, framing of the Search/RSS/Log pages, the properties grid at very narrow widths.
 
 ## Next work package unblocked
 

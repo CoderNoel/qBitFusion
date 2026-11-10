@@ -43,6 +43,7 @@ QMenu {
 }
 
 QMenu::item {
+    min-height: 17px;
     padding: 6px 28px 6px 10px;
     border-radius: 5px;
     background: transparent;
@@ -74,13 +75,31 @@ QMenu::right-arrow {
     right: 6px;
 }
 
+/* Checkable items look like the app's check boxes: a hairline box, filled with a tick when on. */
 QMenu::indicator {
     width: 14px;
     height: 14px;
-    left: 6px;
+    left: 7px;
+    border: 1px solid @borderStrong@;
+    border-radius: 4px;
+    background: transparent;
 }
 
 QMenu::indicator:checked {
+    border-color: palette(highlight);
+    background: palette(highlight);
+    image: url(:/qbitfusion/check.svg);
+}
+
+/* One of several (radio-like) choices: only the chosen one is marked. */
+QMenu::indicator:exclusive {
+    border-color: transparent;
+    background: transparent;
+}
+
+QMenu::indicator:exclusive:checked {
+    border-color: transparent;
+    background: transparent;
     image: url(:/qbitfusion/check-accent.svg);
 }
 
@@ -338,6 +357,14 @@ QListWidget#tabSelection {
     border: none;
 }
 
+QListWidget#tabSelection::item {
+    padding: 6px 8px;
+}
+
+QLabel[qbfHint="true"] {
+    color: @muted@;
+}
+
 QHeaderView {
     background: palette(base);
     border: none;
@@ -387,14 +414,15 @@ QTextBrowser {
     border: 1px solid @border@;
     border-radius: 6px;
     padding: 5px 8px;
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
+    selection-background-color: @selectionStrong@;
+    selection-color: palette(text);
 }
 
 QLineEdit:hover,
 QComboBox:hover,
 QSpinBox:hover,
-QDoubleSpinBox:hover {
+QDoubleSpinBox:hover,
+QDateTimeEdit:hover {
     border-color: @borderStrong@;
 }
 
@@ -411,7 +439,8 @@ QTextEdit:focus {
 QLineEdit:disabled,
 QComboBox:disabled,
 QSpinBox:disabled,
-QDoubleSpinBox:disabled {
+QDoubleSpinBox:disabled,
+QDateTimeEdit:disabled {
     color: @muted@;
     background: palette(window);
 }
@@ -443,41 +472,57 @@ QComboBox QAbstractItemView {
 }
 
 QSpinBox,
-QDoubleSpinBox {
+QDoubleSpinBox,
+QDateTimeEdit {
     padding-right: 22px;
 }
 
 QSpinBox::up-button,
 QDoubleSpinBox::up-button,
+QDateTimeEdit::up-button,
 QSpinBox::down-button,
-QDoubleSpinBox::down-button {
+QDoubleSpinBox::down-button,
+QDateTimeEdit::down-button {
     width: 20px;
     border: none;
     background: transparent;
 }
 
 QSpinBox::up-button,
-QDoubleSpinBox::up-button {
+QDoubleSpinBox::up-button,
+QDateTimeEdit::up-button {
     subcontrol-position: top right;
 }
 
 QSpinBox::down-button,
-QDoubleSpinBox::down-button {
+QDoubleSpinBox::down-button,
+QDateTimeEdit::down-button {
     subcontrol-position: bottom right;
 }
 
 QSpinBox::up-arrow,
-QDoubleSpinBox::up-arrow {
+QDoubleSpinBox::up-arrow,
+QDateTimeEdit::up-arrow {
     image: url(:/qbitfusion/chevron-up.svg);
     width: 10px;
     height: 10px;
 }
 
 QSpinBox::down-arrow,
-QDoubleSpinBox::down-arrow {
+QDoubleSpinBox::down-arrow,
+QDateTimeEdit::down-arrow {
     image: url(:/qbitfusion/chevron-down.svg);
     width: 10px;
     height: 10px;
+}
+
+QTableView QLineEdit,
+QTableView QComboBox,
+QTableView QSpinBox,
+QTableView QDoubleSpinBox {
+    margin: 0 4px;
+    padding-top: 2px;
+    padding-bottom: 2px;
 }
 
 /* ---------------------------------------------------------------- buttons */
@@ -505,7 +550,6 @@ QPushButton#qbfPrimaryButton {
     background: @primaryBg@;
     color: @primaryText@;
     border: 1px solid @primaryBg@;
-    font-weight: 600;
 }
 
 QPushButton:default:hover,
@@ -550,7 +594,7 @@ QPushButton[qbfPropTab="true"] {
     border-radius: 6px;
     padding: 5px 10px;
     color: @muted@;
-    font-weight: 400;
+    font-weight: 500;
 }
 
 QPushButton[qbfPropTab="true"]:hover {
@@ -562,7 +606,6 @@ QPushButton[qbfPropTab="true"]:pressed,
 QPushButton[qbfPropTab="true"][qbfCurrent="true"] {
     background: @selection@;
     color: palette(window-text);
-    font-weight: 600;
 }
 
 /* ---------------------------------------------------------------- check & radio */
@@ -610,6 +653,12 @@ QGroupBox::indicator:disabled {
     background: palette(window);
 }
 
+QCheckBox::indicator:checked:disabled,
+QGroupBox::indicator:checked:disabled {
+    border-color: @borderStrong@;
+    background: @borderStrong@;
+}
+
 QRadioButton::indicator {
     width: 15px;
     height: 15px;
@@ -630,20 +679,48 @@ QRadioButton::indicator:checked {
 
 /* ---------------------------------------------------------------- containers */
 
+/* A section: its title, a hairline, then the content. No box around it. */
 QGroupBox {
     background: transparent;
-    border: 1px solid @border@;
-    border-radius: 8px;
-    margin-top: 22px;
-    padding: 4px 8px 8px 8px;
+    border: none;
+    border-top: 1px solid @border@;
+    border-radius: 0;
+    margin-top: 28px;
+    padding: 8px 0 4px 0;
+}
+
+QGroupBox {
+    font-weight: 600;
+}
+
+QGroupBox > QWidget {
+    font-weight: 400;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    left: 2px;
-    padding: 0 4px 4px 4px;
+    left: 0;
+    padding: 0 0 7px 0;
     color: palette(window-text);
+}
+
+/* A switch inside a section (a checkable group), or a flat group: no rule. What a switch holds is
+   indented under its check box. */
+QGroupBox QGroupBox[checkable="true"],
+QGroupBox[flat="true"] {
+    border: none;
+    margin-top: 26px;
+    padding: 2px 0 2px 0;
+}
+
+QGroupBox QGroupBox[checkable="true"],
+QGroupBox[flat="true"][checkable="true"] {
+    padding-left: 23px;
+    font-weight: 400;
+}
+
+QGroupBox QGroupBox {
     font-weight: 600;
 }
 
@@ -787,4 +864,52 @@ QScrollBar::sub-line {
 QScrollBar::add-page,
 QScrollBar::sub-page {
     background: none;
+}
+
+QAbstractScrollArea::corner {
+    background: transparent;
+    border: none;
+}
+
+/* ---------------------------------------------------------------- sliders */
+
+QSlider::groove:horizontal {
+    height: 4px;
+    border-radius: 2px;
+    background: @borderStrong@;
+}
+
+QSlider::sub-page:horizontal {
+    border-radius: 2px;
+    background: palette(highlight);
+}
+
+QSlider::handle:horizontal {
+    width: 14px;
+    height: 14px;
+    margin: -6px 0;
+    border-radius: 7px;
+    border: 1px solid @borderStrong@;
+    background: @primaryBg@;
+}
+
+QSlider::handle:horizontal:disabled {
+    background: @borderStrong@;
+}
+
+QSlider::sub-page:horizontal:disabled {
+    background: @borderStrong@;
+}
+
+/* The button a toolbar shows when it has more items than room. */
+QToolBarExtension {
+    qproperty-icon: url(:/qbitfusion/chevron-right.svg);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+QToolBarExtension:hover {
+    background: @hoverStrong@;
 }

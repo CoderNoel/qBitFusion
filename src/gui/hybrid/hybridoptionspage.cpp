@@ -70,12 +70,6 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     layout->setSpacing(14);
 
     // ---- header
-    auto *title = new QLabel(tr("Hybrid sources"), content);
-    QFont titleFont = title->font();
-    titleFont.setPointSizeF(titleFont.pointSizeF() * 1.3);
-    titleFont.setBold(true);
-    title->setFont(titleFont);
-    layout->addWidget(title);
     layout->addWidget(muted(tr("Download torrents over HTTPS from a debrid service you subscribe to. qBitFusion stays in charge: "
             "every piece is verified against the original torrent, there is still one download, one set of files and one "
             "info-hash, and verified pieces are kept if the source changes."), content));
@@ -101,12 +95,11 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     auto *accountButtons = new QHBoxLayout;
     m_signIn = new QPushButton(UIThemeManager::instance()->getIcon(u"network-connect"_s), tr("Sign in…"), m_accountBox);
     m_token = new QPushButton(tr("Use private API token…"), m_accountBox);
-    m_token->setFlat(true);
     m_signOut = new QPushButton(UIThemeManager::instance()->getIcon(u"system-log-out"_s), tr("Sign out"), m_accountBox);
     accountButtons->addWidget(m_signIn);
     accountButtons->addWidget(m_signOut);
-    accountButtons->addStretch();
     accountButtons->addWidget(m_token);
+    accountButtons->addStretch();
     accountLayout->addLayout(accountButtons);
     accountLayout->addWidget(muted(Hybrid::SecureStore::isPersistent()
             ? tr("Credentials are kept in the Windows Credential Manager and never written to settings, logs or exports.")
@@ -133,6 +126,8 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     // ---- limits
     m_limitsBox = new QGroupBox(tr("Limits"), content);
     auto *form = new QFormLayout(m_limitsBox);
+    form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+    form->setHorizontalSpacing(16);
     m_perTorrent = new QSpinBox(m_limitsBox);
     m_perTorrent->setRange(1, 32);
     m_global = new QSpinBox(m_limitsBox);
@@ -140,6 +135,8 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     m_memory = new QSpinBox(m_limitsBox);
     m_memory->setRange(8, 1024);
     m_memory->setSuffix(tr(" MiB"));
+    for (QSpinBox *spinBox : {m_perTorrent, m_global, m_memory})
+        spinBox->setMinimumWidth(120);
     form->addRow(tr("Parallel HTTPS pieces per torrent:"), m_perTorrent);
     form->addRow(tr("Parallel HTTPS pieces in total:"), m_global);
     form->addRow(tr("Maximum memory for pieces in flight:"), m_memory);

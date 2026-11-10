@@ -41,6 +41,8 @@
 #include <QToolButton>
 
 #include "fspathedit_p.h"
+#include "modern/modernappearance.h"
+#include "uithememanager.h"
 
 namespace
 {
@@ -91,7 +93,9 @@ FileSystemPathEdit::FileSystemPathEditPrivate::FileSystemPathEditPrivate(
                         FileSystemPathEdit *q, Private::IFileEditorWithCompletion *editor)
     : q_ptr {q}
     , m_editor {editor}
-    , m_browseAction {new QAction(QApplication::style()->standardIcon(QStyle::SP_DirOpenIcon), browseButtonFullText.tr(), q)}
+    , m_browseAction {new QAction((ModernAppearance::isActive()
+            ? UIThemeManager::instance()->getIcon(u"directory"_s)
+            : QApplication::style()->standardIcon(QStyle::SP_DirOpenIcon)), browseButtonFullText.tr(), q)}
     , m_browseBtn {new QToolButton(q)}
     , m_fileNameFilter {tr("Any file") + u" (*)"}
     , m_validator {new Private::FileSystemPathValidator(q)}
