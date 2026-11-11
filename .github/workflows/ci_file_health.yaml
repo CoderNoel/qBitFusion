@@ -1,8 +1,6 @@
 name: CI - File health
 
-# qBitFusion: manual only. The inherited pre-commit checks have not been run against this fork's files yet.
-# Change this back to [pull_request, push] once it passes.
-on: workflow_dispatch
+on: [pull_request, push, workflow_dispatch]
 
 # Reading the repository is all a job may do unless it asks for more below.
 permissions:

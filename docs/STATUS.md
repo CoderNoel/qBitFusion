@@ -72,7 +72,7 @@ verified pieces at about 10 MiB/s with no peers connected, and later completed o
 including two problems found and fixed on the way, are in DECISIONS.md.
 
 **Continuous integration.** The Windows workflow builds the same configuration on a GitHub runner and runs
-the same 32 suites; it passes. The Python and WebUI checks inherited from qBittorrent pass. The Linux and
+the same 32 suites; it passes. The Python, WebUI and file-health checks inherited from qBittorrent pass. The Linux and
 macOS workflows are set to manual, because this code has not been built there yet.
 
 ## Privacy and security properties
