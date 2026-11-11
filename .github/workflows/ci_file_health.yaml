@@ -71,7 +71,9 @@ jobs:
               | (.runs[].tool.driver.rules |= map(select($IGNORE_ID)))" \
             > "${{ runner.temp }}/zizmor_results.sarif"
 
+      # Code scanning is not available to a private repository.
       - name: Upload zizmor results
+        if: ${{ !github.event.repository.private }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           category: zizmor

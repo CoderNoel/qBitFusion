@@ -55,13 +55,14 @@ jobs:
           npm run format
           git diff --exit-code
 
+      # Code scanning is not available to a private repository.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         with:
           config-file: .github/workflows/helper/codeql/js.yaml
           languages: javascript
 
       - name: Run CodeQL analysis
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         uses: github/codeql-action/analyze@v4
