@@ -30,6 +30,9 @@
 #include "aboutdialog.h"
 
 #include <QClipboard>
+#include <QGroupBox>
+#include <QLabel>
+#include <QVBoxLayout>
 
 #include "base/path.h"
 #include "base/unicodestrings.h"
@@ -88,6 +91,18 @@ AboutDialog::AboutDialog(QWidget *parent)
         m_ui->labelMascot->setPixmap(UIThemeManager::instance()->getScaledPixmap(u"qbittorrent"_s, 96));
     else
         m_ui->labelMascot->setPixmap(Utils::Gui::scaledPixmap(Path(u":/icons/mascot.png"_s)));
+
+    // Authors: this project first, then qBittorrent's own, labelled as such.
+    auto *fusionBox = new QGroupBox(u"qBitFusion"_s, m_ui->authorTab);
+    auto *fusionLayout = new QVBoxLayout(fusionBox);
+    auto *fusionLabel = new QLabel(tr("Created and maintained by %1")
+            .arg(u"<a href=\"https://github.com/CoderNoel\">Noel (CoderNoel)</a>"_s), fusionBox);
+    fusionLabel->setTextFormat(Qt::RichText);
+    fusionLabel->setOpenExternalLinks(true);
+    fusionLayout->addWidget(fusionLabel);
+    m_ui->authorTabLayout->insertWidget(0, fusionBox);
+    m_ui->groupBox_2->setTitle(tr("qBittorrent: current maintainer"));
+    m_ui->groupBox->setTitle(tr("qBittorrent: original author"));
 
     // Thanks
     if (const auto readResult = Utils::IO::readFile(Path(u":/thanks.html"_s), -1, QIODevice::Text))

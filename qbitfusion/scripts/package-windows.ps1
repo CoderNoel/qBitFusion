@@ -61,6 +61,7 @@ $commit = (& git -C $repo rev-parse --short HEAD).Trim()
 $readme = @"
 qBitFusion $Version (Windows x64, portable)
 Built from commit $commit.
+Created and maintained by Noel (CoderNoel), https://github.com/CoderNoel
 
 RUN
   Extract the whole folder anywhere you can write to, then start qbitfusion.exe.

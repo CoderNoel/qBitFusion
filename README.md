@@ -149,6 +149,13 @@ This is a download client. Use it for content you have the right to download and
 terms. It does not work around provider limits, blocks or takedowns, and changes that do will not be
 accepted.
 
+## Credits
+
+qBitFusion is created and maintained by [Noel (CoderNoel)](https://github.com/CoderNoel).
+
+It stands on [qBittorrent](https://github.com/qbittorrent/qBittorrent), the work of its [authors](AUTHORS) and
+many contributors, and on [libtorrent] by Arvid Norberg.
+
 ## Relationship to qBittorrent
 
 qBitFusion is based on qBittorrent `release-5.3.0` and keeps its history. It is a separate project and is
