@@ -2,7 +2,9 @@ name: CI - Python
 
 on: [pull_request, push]
 
-permissions: {}
+# The repository is private: the job token needs an explicit read grant to check it out.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}

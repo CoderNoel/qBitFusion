@@ -4,7 +4,9 @@ name: CI - Ubuntu
 # Change this back to [pull_request, push] once it passes.
 on: workflow_dispatch
 
-permissions: {}
+# The repository is private: the job token needs an explicit read grant to check it out.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -15,6 +17,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       actions: write
       security-events: write
 

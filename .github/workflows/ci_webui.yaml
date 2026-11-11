@@ -2,7 +2,9 @@ name: CI - WebUI
 
 on: [pull_request, push]
 
-permissions: {}
+# The repository is private: the job token needs an explicit read grant to check it out.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -13,6 +15,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
 
     defaults:
