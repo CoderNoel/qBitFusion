@@ -76,6 +76,7 @@ Copy-Item $builtExe $stage
 Copy-Item (Join-Path $repo "src/gui/modern/brand/qbitfusion.ico") $stage
 
 & (Join-Path $tc.qt "bin\windeployqt.exe") --release --no-translations --no-system-d3d-compiler `
+    --no-system-dxc-compiler --no-compiler-runtime `
     --no-opengl-sw --no-quick-import --dir $stage (Join-Path $stage "qbitfusion.exe") | Out-Null
 
 # The app links the MSVC runtime dynamically; ship it app-local so no redistributable install is needed.
