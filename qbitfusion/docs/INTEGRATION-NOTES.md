@@ -14,7 +14,7 @@ Recorded on 2026-11-09 from the pinned source; line numbers are those of `releas
 
 ## Where the code differs from the specification
 
-1. **One specification file.** The specification is `docs/SPECIFICATION.md`; its numbered sections are what "spec NN" refers to. `contracts/hybrid-status.schema.json` (spec 10) does not exist yet.
+1. **One specification file.** The specification is `qbitfusion/docs/SPECIFICATION.md`; its numbered sections are what "spec NN" refers to. `contracts/hybrid-status.schema.json` (spec 10) does not exist yet.
 2. **libtorrent version.** `INSTALL` says libtorrent `1.2.19–1.2.x || 2.0.10–2.0.x` and `CMakeLists.txt` sets `minLibtorrentVersion 2.0.10`. Upstream's `ci_windows.yaml` builds **2.1.2**, 2.0.15 and 1.2.20 with Boost 1.91 / Qt 6.10.3, so the 2.1.x baseline is CI-tested upstream and `INSTALL` is stale. This fork's Windows workflow builds 2.1.2 only. Code already branches on `LIBTORRENT_VERSION_NUM >= 20100` (e.g. `sessionimpl.cpp` `initializeNativeSession`).
 3. **Spec folder proposal.** `src/base/hybrid/` does not exist upstream; it is new. The base library is `qbt_base` (`src/base/CMakeLists.txt`) and tests are QtTest executables listed in `test/CMakeLists.txt` (target `check`, enabled with `-DTESTING=ON`).
 

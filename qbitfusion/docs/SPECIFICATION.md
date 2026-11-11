@@ -996,7 +996,7 @@ flowchart LR
 #### Phase P0 | Repository reconnaissance + pinned build
 
 **Owner:** Core engineer + build engineer. \
-**Output:** `docs/INTEGRATION-NOTES.md`, reproducible build scripts, exact toolchain versions, working tests, baseline benchmark and appropriate dev profile. \
+**Output:** `qbitfusion/docs/INTEGRATION-NOTES.md`, reproducible build scripts, exact toolchain versions, working tests, baseline benchmark and appropriate dev profile. \
 **Done:** qBittorrent starts with a normal test torrent, original tests run, paths to metadata/alerts/priorities/network/settings confirmed against tag; licensing notices recorded.
 
 #### Phase P1 | Libtorrent feasibility spike (hard gate)

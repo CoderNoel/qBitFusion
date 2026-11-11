@@ -16,7 +16,7 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 - **A packet-level check** that "Debrid only" really produces no swarm traffic.
 - **Translations** of the new text.
 
-Current gaps and unverified claims are listed in [docs/STATUS.md](docs/STATUS.md).
+Current gaps and unverified claims are listed in [qbitfusion/docs/STATUS.md](qbitfusion/docs/STATUS.md).
 
 ## Reporting a bug
 
@@ -50,7 +50,7 @@ pwsh qbitfusion/scripts/capture-windows.ps1 -ProcessId $id -OutDir build/ui-smok
 
 ## Rules for a change
 
-The design rules are at the top of [docs/SPECIFICATION.md](docs/SPECIFICATION.md#design-rules). They are not
+The design rules are at the top of [qbitfusion/docs/SPECIFICATION.md](qbitfusion/docs/SPECIFICATION.md#design-rules). They are not
 optional. The short version:
 
 1. libtorrent owns storage, hashing and resume data. Provider bytes never go straight to a torrent's files.
@@ -66,7 +66,7 @@ And for the code itself:
 - Follow [CODING_GUIDELINES.md](CODING_GUIDELINES.md) (inherited from qBittorrent).
 - Keep changes to upstream files small and marked with a `qBitFusion:` comment, so that merging upstream
   releases stays possible. Prefer new files in `src/base/hybrid`, `src/gui/hybrid` and `src/gui/modern`.
-  See [docs/UPSTREAM.md](docs/UPSTREAM.md).
+  See [qbitfusion/docs/UPSTREAM.md](qbitfusion/docs/UPSTREAM.md).
 - Changes to the look go behind `ModernAppearance::isActive()`.
 - Add tests for new behavior and for its failure paths. A pull request must build without warnings
   (`/WX`) and pass every suite.

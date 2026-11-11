@@ -12,4 +12,4 @@ pwsh qbitfusion/scripts/build-windows.ps1 -Spike
 ```
 
 Every check prints `PASS`, `FAIL` or `INFO`, and the program exits non-zero on any failure. The results the
-design is based on are recorded in [docs/DECISIONS.md](../../docs/DECISIONS.md).
+design is based on are recorded in [docs/DECISIONS.md](../docs/DECISIONS.md).

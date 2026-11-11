@@ -26,7 +26,7 @@
  * exception statement from your version.
  */
 
-// qBitFusion P1 feasibility spike (CORE-002, docs/SPECIFICATION.md section 03 §9, gates G1/G2, first layer of G4).
+// qBitFusion P1 feasibility spike (CORE-002, qbitfusion/docs/SPECIFICATION.md section 03 §9, gates G1/G2, first layer of G4).
 //
 // Proves or disproves, against the exact pinned libtorrent build, the assumptions the hybrid design
 // depends on. Every check prints PASS/FAIL/INFO and the process exits non-zero on any FAIL.

@@ -40,7 +40,7 @@ namespace HybridGui
 {
     class SourcePicker;
 
-    // Preferences > Hybrid sources (docs/SPECIFICATION.md section 10 "Global preferences").
+    // Preferences > Hybrid sources (qbitfusion/docs/SPECIFICATION.md section 10 "Global preferences").
     class OptionsPage final : public QWidget
     {
         Q_OBJECT

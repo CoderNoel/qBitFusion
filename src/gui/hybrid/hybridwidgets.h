@@ -49,7 +49,7 @@ namespace Hybrid
 
 namespace HybridGui
 {
-    // The privacy notice from docs/SPECIFICATION.md section 07, verbatim in meaning.
+    // The privacy notice from qbitfusion/docs/SPECIFICATION.md section 07, verbatim in meaning.
     QString p2pPrivacyNotice();
 
     // Explicit, informed consent before any torrent may fall back to the swarm (ADR-004).

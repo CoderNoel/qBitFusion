@@ -45,7 +45,7 @@ class QNetworkAccessManager;
 class QTimer;
 
 // Real-Debrid adapter (spec 05 "Provider plan: Real-Debrid first").
-// Contract verified against https://api.real-debrid.com/ on 2026-11-09 (see docs/DECISIONS.md).
+// Contract verified against https://api.real-debrid.com/ on 2026-11-09 (see qbitfusion/docs/DECISIONS.md).
 // Known gaps, all failing closed:
 //  - instantAvailability could not be confirmed, so the only non-mutating availability check is
 //    finding an existing remote torrent with the same v1 info-hash in the user's account.

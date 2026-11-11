@@ -1,7 +1,7 @@
 name: Upstream watch
 
 # Opens an issue when qBittorrent publishes a newer release in the series this fork is based on.
-# It only reports; merging is done by a person (see docs/UPSTREAM.md).
+# It only reports; merging is done by a person (see qbitfusion/docs/UPSTREAM.md).
 
 on:
   schedule:
@@ -51,6 +51,6 @@ jobs:
           count="$(git rev-list --count "${base}..${latest}")"
           gh issue create --repo "${GITHUB_REPOSITORY}" --title "${title}" --body "This fork is based on \`${base}\`. Upstream has published \`${latest}\` (${count} commits since the base).
 
-          How to merge it, and where conflicts are likely: docs/UPSTREAM.md
+          How to merge it, and where conflicts are likely: qbitfusion/docs/UPSTREAM.md
 
           Upstream changes: https://github.com/qbittorrent/qBittorrent/compare/${base}...${latest}"

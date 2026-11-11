@@ -16,7 +16,7 @@ the two relate and how to bring upstream fixes into this repository.
 Upstream fixes do not arrive here by themselves. A person merges them, because qBitFusion changes some of
 the same files and a merge can conflict.
 
-What is automated: the workflow [`upstream-watch.yaml`](../.github/workflows/upstream-watch.yaml) checks
+What is automated: the workflow [`upstream-watch.yaml`](../../.github/workflows/upstream-watch.yaml) checks
 once a week whether upstream has published a newer release in the series this fork is based on, and opens
 an issue when it has. (Its check has run and works. The step that opens the issue has not been exercised
 yet, because there has been no newer release to report.)
@@ -48,7 +48,7 @@ qBitFusion adds most of its code in new directories, which never conflict:
 
 - `src/base/hybrid/`, `src/gui/hybrid/` — the hybrid transport and its GUI
 - `src/gui/modern/` — the modern look, icons and shell widgets
-- `qbitfusion/`, `docs/` — scripts, notes and documentation
+- `qbitfusion/` — documentation, scripts, the spike and the branding check
 - `test/testhybrid*.cpp`
 
 It also edits about 60 upstream files. The ones that carry the largest changes, and so the highest chance

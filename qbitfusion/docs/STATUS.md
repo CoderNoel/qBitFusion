@@ -1,6 +1,6 @@
 # Project status
 
-What is built, how it was verified, and what is still open. The [README](../README.md) has the short
+What is built, how it was verified, and what is still open. The [README](../../README.md) has the short
 version; design decisions and raw observations are in [DECISIONS.md](DECISIONS.md).
 
 Last reviewed: 2026-11-11.

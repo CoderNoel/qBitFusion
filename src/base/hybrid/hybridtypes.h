@@ -32,7 +32,7 @@
 #include <QString>
 
 // UI- and libtorrent-independent vocabulary for the hybrid (debrid + BitTorrent) transport.
-// Spec: docs/SPECIFICATION.md sections 01 (policies), 04 (states, reasons), 10 (status schema).
+// Spec: qbitfusion/docs/SPECIFICATION.md sections 01 (policies), 04 (states, reasons), 10 (status schema).
 
 namespace Hybrid
 {

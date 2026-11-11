@@ -9,7 +9,7 @@
   from a debrid account over HTTPS as well as from BitTorrent peers.
 </p>
 
-![Main window with downloads in progress](docs/screenshots/main-window.png)
+![Main window with downloads in progress](qbitfusion/docs/screenshots/main-window.png)
 
 <sub>Screenshots use Creative Commons films. The downloads are real; the "HTTPS · Real-Debrid" source shown
 for one of them is staged, because the demo files were not on a debrid account.</sub>
@@ -54,7 +54,7 @@ layout and resume data, so the two kinds of source can be combined in one downlo
   of settings files and logs.
 - With the feature switched off, behavior is the same as qBittorrent's.
 
-![Add-torrent dialog](docs/screenshots/add-torrent.png)
+![Add-torrent dialog](qbitfusion/docs/screenshots/add-torrent.png)
 
 ### Interface
 
@@ -64,7 +64,7 @@ layout and resume data, so the two kinds of source can be combined in one downlo
 - A monochrome icon set, a reworked add-torrent dialog, and restyled Options pages.
 - Options > Behavior can switch back to the classic qBittorrent look.
 
-![Options dialog](docs/screenshots/options.png)
+![Options dialog](qbitfusion/docs/screenshots/options.png)
 
 ## Limitations
 
@@ -93,9 +93,9 @@ What is missing or unverified:
 | Translations | New text is English only. |
 | Distribution | A portable zip for Windows, built by `qbitfusion/scripts/package-windows.ps1`. No installer, no code signing, no update check. |
 
-[docs/STATUS.md](docs/STATUS.md) is the detailed version of this list,
-[docs/DECISIONS.md](docs/DECISIONS.md) records the design decisions and the live observations,
-and [docs/SPECIFICATION.md](docs/SPECIFICATION.md) is the design the transport was built from.
+[qbitfusion/docs/STATUS.md](qbitfusion/docs/STATUS.md) is the detailed version of this list,
+[qbitfusion/docs/DECISIONS.md](qbitfusion/docs/DECISIONS.md) records the design decisions and the live observations,
+and [qbitfusion/docs/SPECIFICATION.md](qbitfusion/docs/SPECIFICATION.md) is the design the transport was built from.
 
 ## Open work
 
@@ -149,6 +149,25 @@ This is a download client. Use it for content you have the right to download and
 terms. It does not work around provider limits, blocks or takedowns, and changes that do will not be
 accepted.
 
+## Repository layout
+
+The tree is qBittorrent's, kept as it is so that upstream releases can be merged. What this project adds
+sits in a few places:
+
+| Path | Contents |
+| --- | --- |
+| `src/base/hybrid/`, `src/gui/hybrid/` | The hybrid transport and its interface. |
+| `src/gui/modern/` | The modern look: palettes, stylesheet, icons, shell widgets. |
+| `test/testhybrid*.cpp` | Tests for the hybrid code. |
+| `qbitfusion/docs/` | This project's documentation: status, decisions, specification, upstream guide. |
+| `qbitfusion/scripts/` | Windows scripts: toolchain, build, install, package, test instance. |
+| `qbitfusion/spike/`, `qbitfusion/tests/`, `qbitfusion/design/` | The libtorrent feasibility spike, the branding check, the logo source. |
+
+Everything else is inherited, including some files that describe qBittorrent rather than this fork: `doc/`
+(qBittorrent's man pages), `Changelog` and `INSTALL` (qBittorrent's), `dist/` (its packaging for other
+platforms, unused here so far) and the translations in `src/lang/`. Edits to inherited files are kept small;
+[qbitfusion/docs/UPSTREAM.md](qbitfusion/docs/UPSTREAM.md) lists them.
+
 ## Credits
 
 qBitFusion is created and maintained by [Noel (CoderNoel)](https://github.com/CoderNoel).
@@ -166,7 +185,7 @@ qBitFusion is based on qBittorrent `release-5.3.0` and keeps its history. It is 
 - qBittorrent is the work of its [authors](AUTHORS) and contributors. They accept
   [donations](https://www.qbittorrent.org/donate); this project does not.
 
-[docs/UPSTREAM.md](docs/UPSTREAM.md) explains how upstream releases are merged, and where conflicts are
+[qbitfusion/docs/UPSTREAM.md](qbitfusion/docs/UPSTREAM.md) explains how upstream releases are merged, and where conflicts are
 likely.
 
 ## License

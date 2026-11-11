@@ -47,7 +47,7 @@ class QTimer;
 // Specialized HTTP Range transfer adapter (spec 05 "HTTP client (reuse Qt)").
 // qBittorrent's Net::DownloadManager is not reused for the data plane because at release-5.3.0 it
 // cannot set request headers (Range), buffers the full body, and transparently gunzips — all of
-// which violate the range semantics required here. See docs/INTEGRATION-NOTES.md.
+// which violate the range semantics required here. See qbitfusion/docs/INTEGRATION-NOTES.md.
 
 namespace Hybrid
 {
