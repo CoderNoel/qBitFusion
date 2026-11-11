@@ -18,8 +18,8 @@ the same files and a merge can conflict.
 
 What is automated: the workflow [`upstream-watch.yaml`](../.github/workflows/upstream-watch.yaml) checks
 once a week whether upstream has published a newer release in the series this fork is based on, and opens
-an issue when it has. (It has not run yet at the time of writing; treat it as untested until its first
-run.)
+an issue when it has. (Its check has run and works. The step that opens the issue has not been exercised
+yet, because there has been no newer release to report.)
 
 ## Merging an upstream release
 
