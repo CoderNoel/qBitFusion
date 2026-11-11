@@ -68,7 +68,7 @@ private slots:
         QVERIFY(normalizeRelativePath(QString(u"a"_s + QChar(0) + u"b"_s)).isEmpty());
         QVERIFY(normalizeRelativePath(u""_s).isEmpty());
         // NFC: "é" composed vs decomposed compare equal (T08).
-        QCOMPARE(normalizeRelativePath(u"caf\u0065\u0301.txt"_s), normalizeRelativePath(u"caf\u00e9.txt"_s));
+        QCOMPARE(normalizeRelativePath(u"\u0065\u0301toile.txt"_s), normalizeRelativePath(u"\u00e9toile.txt"_s));
     }
 
     void bindsWithRoot() const

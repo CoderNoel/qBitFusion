@@ -4,7 +4,7 @@ name: CI - Ubuntu
 # Change this back to [pull_request, push] once it passes.
 on: workflow_dispatch
 
-# The repository is private: the job token needs an explicit read grant to check it out.
+# Reading the repository is all a job may do unless it asks for more below.
 permissions:
   contents: read
 

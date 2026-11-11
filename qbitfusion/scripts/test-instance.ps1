@@ -6,7 +6,7 @@
 
 .EXAMPLE
   $id = pwsh qbitfusion/scripts/test-instance.ps1
-  $id = pwsh qbitfusion/scripts/test-instance.ps1 -Arguments build/ui-smoke/fixture/sample.torrent
+  $id = pwsh qbitfusion/scripts/test-instance.ps1 -Arguments path\to\some.torrent   # opens its add dialog
   pwsh qbitfusion/scripts/capture-windows.ps1 -ProcessId $id -OutDir build/ui-smoke/audit -Prefix main
 #>
 param(

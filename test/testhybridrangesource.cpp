@@ -54,7 +54,7 @@ namespace
         return data;
     }
 
-    // Minimal HTTP/1.1 fixture server ("local mock CDN"). One behaviour per path.
+    // Minimal HTTP/1.1 fixture server ("local mock CDN"). One behavior per path.
     class FixtureServer final : public QTcpServer
     {
     public:
@@ -198,7 +198,7 @@ private slots:
     void goodRange()
     {
         const RangeRequest req {m_server.url(u"a.bin"_s), {1000, 17383}, 100'000, {}};
-        RangeFetch f {&m_nam, req, m_policy, nullptr, nowMs};
+        RangeFetch f {&m_network, req, m_policy, nullptr, nowMs};
         QSignalSpy ok {&f, &RangeFetch::succeeded};
         QSignalSpy bad {&f, &RangeFetch::failed};
         f.start();
@@ -226,7 +226,7 @@ private slots:
         QFETCH(int, category);
         m_server.mode = static_cast<FixtureServer::Mode>(mode);
         const RangeRequest req {m_server.url(u"a.bin"_s), {0, 16383}, 100'000, {}};
-        RangeFetch f {&m_nam, req, m_policy, nullptr, nowMs};
+        RangeFetch f {&m_network, req, m_policy, nullptr, nowMs};
         QSignalSpy ok {&f, &RangeFetch::succeeded};
         QSignalSpy bad {&f, &RangeFetch::failed};
         f.start();
@@ -245,7 +245,7 @@ private slots:
         m_server.mode = FixtureServer::Mode::Stall;
         RangeRequest req {m_server.url(u"a.bin"_s), {0, 99}, 100'000, {}};
         req.timeouts = {.inactivityMs = 300, .totalMs = 5000};
-        RangeFetch f {&m_nam, req, m_policy, nullptr, nowMs};
+        RangeFetch f {&m_network, req, m_policy, nullptr, nowMs};
         QSignalSpy bad {&f, &RangeFetch::failed};
         f.start();
         QVERIFY(bad.wait(3000));
@@ -256,7 +256,7 @@ private slots:
     {
         // Production policy refuses plain-http loopback outright, before any socket is opened.
         const int before = m_server.requests;
-        RangeFetch f {&m_nam, {m_server.url(u"a.bin"_s), {0, 99}, 100'000, {}}, UrlPolicy {}, nullptr, nowMs};
+        RangeFetch f {&m_network, {m_server.url(u"a.bin"_s), {0, 99}, 100'000, {}}, UrlPolicy {}, nullptr, nowMs};
         QSignalSpy bad {&f, &RangeFetch::failed};
         f.start();
         QCOMPARE(bad.count(), 1);
@@ -266,7 +266,7 @@ private slots:
     void throttled()
     {
         TokenBucket bucket {200'000, 16 * 1024};
-        RangeFetch f {&m_nam, {m_server.url(u"a.bin"_s), {0, 99'999}, 100'000, {}}, m_policy, &bucket, nowMs};
+        RangeFetch f {&m_network, {m_server.url(u"a.bin"_s), {0, 99'999}, 100'000, {}}, m_policy, &bucket, nowMs};
         QSignalSpy ok {&f, &RangeFetch::succeeded};
         QElapsedTimer t;
         t.start();
@@ -292,7 +292,7 @@ private slots:
             {0, {m_server.url(u"a.bin"_s), 100'000}},
             {2, {m_server.url(u"b.bin"_s), 70'001}}
         };
-        PieceAssembly a {&m_nam, job, sources, m_policy, nullptr, nowMs, {}};
+        PieceAssembly a {&m_network, job, sources, m_policy, nullptr, nowMs, {}};
         QSignalSpy done {&a, &PieceAssembly::completed};
         a.start();
         QVERIFY(done.wait(5000));
@@ -308,14 +308,14 @@ private slots:
     {
         PieceJob gappy {1, 100, 1, {{0, 0, 40, 0, false}, {0, 50, 60, 50, false}}};
         QVERIFY(!slicesTilePiece(gappy.slices, gappy.length));
-        PieceAssembly a {&m_nam, gappy, {{0, {m_server.url(u"a.bin"_s), 100'000}}}, m_policy, nullptr, nowMs, {}};
+        PieceAssembly a {&m_network, gappy, {{0, {m_server.url(u"a.bin"_s), 100'000}}}, m_policy, nullptr, nowMs, {}};
         QSignalSpy bad {&a, &PieceAssembly::failed};
         a.start();
         QCOMPARE(bad.count(), 1);
 
         // Slice in a file the provider does not expose (T05 boundary) -> fail, do not guess.
         PieceJob unbound {2, 100, 1, {{5, 0, 100, 0, false}}};
-        PieceAssembly b {&m_nam, unbound, {}, m_policy, nullptr, nowMs, {}};
+        PieceAssembly b {&m_network, unbound, {}, m_policy, nullptr, nowMs, {}};
         QSignalSpy bad2 {&b, &PieceAssembly::failed};
         b.start();
         QCOMPARE(bad2.count(), 1);
@@ -324,7 +324,7 @@ private slots:
 
 private:
     FixtureServer m_server;
-    QNetworkAccessManager m_nam;
+    QNetworkAccessManager m_network;
     const UrlPolicy m_policy {.allowLoopbackForTesting = true};
 };
 

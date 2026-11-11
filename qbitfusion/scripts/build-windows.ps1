@@ -7,7 +7,9 @@
   pwsh qbitfusion/scripts/build-windows.ps1              # build + ctest (target "check")
   pwsh qbitfusion/scripts/build-windows.ps1 -Spike       # build + run the libtorrent spike only
   pwsh qbitfusion/scripts/build-windows.ps1 -BuildDir build-off -NoTests
-  pwsh qbitfusion/scripts/build-windows.ps1 -Release     # optimised app build in build-release, no tests
+  pwsh qbitfusion/scripts/build-windows.ps1 -Release     # optimized app build in build-release, no tests
+  pwsh qbitfusion/scripts/build-windows.ps1 -Reconfigure # run CMake's configure step again first
+  pwsh qbitfusion/scripts/build-windows.ps1 -Config Debug -BuildDir build-debug
 #>
 param(
     [string]$BuildDir = "build",

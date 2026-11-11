@@ -1,28 +1,15 @@
 version: 2
 
 updates:
+  # Keeps the actions used by the workflows current. The pre-commit hook versions are not listed here:
+  # they follow upstream qBittorrent and arrive with upstream merges.
   - package-ecosystem: "github-actions"
     directory: "/"
     commit-message:
-      prefix: "GHA CI"
+      prefix: "CI"
     groups:
-      GHA_CI-dependency-update:
+      actions:
         patterns:
           - "*"
-    labels:
-      - "CI"
-    schedule:
-      interval: "monthly"
-
-  - package-ecosystem: "pre-commit"
-    directory: "/"
-    commit-message:
-      prefix: "GHA CI"
-    groups:
-      GHA_CI-dependency-update:
-        patterns:
-          - "*"
-    labels:
-      - "CI"
     schedule:
       interval: "monthly"

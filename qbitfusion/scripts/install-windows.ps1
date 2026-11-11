@@ -14,6 +14,8 @@
   pwsh qbitfusion/scripts/install-windows.ps1              # build Release, then install
   pwsh qbitfusion/scripts/install-windows.ps1 -NoBuild     # install the existing Release build
   pwsh qbitfusion/scripts/install-windows.ps1 -Uninstall   # remove app, shortcuts and entry (keeps profile)
+  pwsh qbitfusion/scripts/install-windows.ps1 -Uninstall -RemoveProfile   # also delete settings, torrents and logs
+  pwsh qbitfusion/scripts/install-windows.ps1 -NoDesktopShortcut -InstallDir D:\Apps\qBitFusion
 #>
 param(
     [string]$BuildDir = "build-release",
@@ -39,7 +41,7 @@ function Assert-NotRunning {
     $running = Get-Process qbitfusion, qbittorrent -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -and $_.Path.StartsWith($InstallDir, [StringComparison]::OrdinalIgnoreCase) }
     if ($running) {
-        throw "$appName is running from $InstallDir (PID $($running.Id -join ', ')). Quit it first (File > Exit)."
+        throw "$appName is running from $InstallDir (PID $($running.Id -join ', ')). Quit it first (menu button > File > Exit)."
     }
 }
 

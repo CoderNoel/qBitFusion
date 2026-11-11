@@ -107,7 +107,7 @@ namespace Modern
         QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     };
 
-    // Accent colour choice for Options: preset chips plus a custom colour.
+    // Accent color choice for Options: preset chips plus a custom color.
     class AccentPicker final : public QWidget
     {
         Q_OBJECT
@@ -132,6 +132,6 @@ namespace Modern
     // at the title's left edge instead of being inset as if there were a frame around it.
     void flattenSections(QWidget *root);
 
-    // Marks a label as secondary text (muted colour).
+    // Marks a label as secondary text (muted color).
     void markAsHint(QLabel *label);
 }

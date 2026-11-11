@@ -253,7 +253,7 @@ QString Hybrid::displayText(const Reason reason)
     case Reason::MetadataVerified:
         return tr("Torrent metadata verified");
     case Reason::MetadataUnavailableWithoutP2P:
-        return tr("Metadata unavailable without P2P");
+        return tr("Metadata unavailable without BitTorrent peers");
     case Reason::ProviderReady:
         return tr("Provider copy verified; remaining pieces will be checked against the original torrent");
     case Reason::ProviderUnauthorized:
@@ -285,7 +285,7 @@ QString Hybrid::displayText(const Reason reason)
     case Reason::DiskError:
         return tr("Disk error");
     case Reason::PermissionRequiredForP2P:
-        return tr("Permission required for P2P fallback");
+        return tr("Permission required for BitTorrent fallback");
     case Reason::RecoveryConfirmed:
         return tr("Provider available again");
     case Reason::PeersDrained:

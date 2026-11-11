@@ -1074,10 +1074,10 @@ void TransferListWidget::addHybridSourceMenu(QMenu *listMenu)
     };
     addChoice(Hybrid::TransportPolicy::DebridOnly, tr("Debrid only")
             , tr("HTTPS only. No peer, tracker or DHT activity for these torrents."));
-    addChoice(Hybrid::TransportPolicy::DebridPreferred, tr("Debrid preferred, BitTorrent fallback…")
+    addChoice(Hybrid::TransportPolicy::DebridPreferred, tr("Debrid preferred, BitTorrent fallback...")
             , tr("HTTPS while available; asks before allowing BitTorrent peers."));
     addChoice(Hybrid::TransportPolicy::TorrentOnly, tr("BitTorrent (standard)")
-            , tr("Standard BitTorrent behaviour."));
+            , tr("Standard BitTorrent behavior."));
 }
 
 void TransferListWidget::displayListMenu()

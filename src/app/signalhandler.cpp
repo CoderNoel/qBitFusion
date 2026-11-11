@@ -97,7 +97,7 @@ namespace
     {
         const char msg[] = "\n\n*************************************************************\n"
             "This is a qBitFusion build. Do not report this crash to the qBittorrent project.\n"
-            "Keep the following information for whoever maintains your qBitFusion build:\n\n"
+            "Please report it at https://github.com/CoderNoel/qBitFusion/issues with the following information:\n\n"
             "qBitFusion (qBittorrent) version: " QBT_VERSION "\n\n"
             "Caught signal: ";
         const char *sigName = sysSigName[signum];

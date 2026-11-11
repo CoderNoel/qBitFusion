@@ -2,9 +2,16 @@
 .SYNOPSIS
   Minimal, targeted window helpers for UI smoke tests of a qBitFusion test instance.
   Messages are posted to that process's own windows only; no global input is synthesized.
+
+  Find-QbfWindow    window handle of a process by title prefix
+  Send-QbfClose     ask a window to close
+  Send-QbfKey       post a key press (optionally with Alt)
+  Send-QbfClick     post a left click at client coordinates
+  Move-QbfWindow    move a window to a fixed position and resize it
+  Request-QbfExit   ask the app to exit the way an installer does, and wait for it
 .EXAMPLE
   . qbitfusion/scripts/window-tools.ps1
-  $h = Find-QbfWindow -ProcessId 1234 -Title 'qBittorrent v5.3.0'
+  $h = Find-QbfWindow -ProcessId 1234 -Title 'qBitFusion'
   Send-QbfClose $h
 #>
 if (-not ('QbfWin' -as [type])) {

@@ -16,7 +16,7 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 - **A packet-level check** that "Debrid only" really produces no swarm traffic.
 - **Translations** of the new text.
 
-Current gaps and unverified claims are listed in [qbitfusion/STATUS.md](qbitfusion/STATUS.md).
+Current gaps and unverified claims are listed in [docs/STATUS.md](docs/STATUS.md).
 
 ## Reporting a bug
 
@@ -58,7 +58,7 @@ optional. The short version:
 3. "Debrid only" produces no swarm traffic. BitTorrent fallback needs the user's explicit consent.
 4. No tokens or signed links in code, logs, screenshots, tests or commits.
 5. Nothing that works around a provider's limits, blocks or takedowns.
-6. With the feature off, behaviour is the same as upstream.
+6. With the feature off, behavior is the same as upstream.
 7. A claim needs proof: a test, a measurement or a repeatable manual check.
 
 And for the code itself:
@@ -68,7 +68,7 @@ And for the code itself:
   releases stays possible. Prefer new files in `src/base/hybrid`, `src/gui/hybrid` and `src/gui/modern`.
   See [docs/UPSTREAM.md](docs/UPSTREAM.md).
 - Changes to the look go behind `ModernAppearance::isActive()`.
-- Add tests for new behaviour and for its failure paths. A pull request must build without warnings
+- Add tests for new behavior and for its failure paths. A pull request must build without warnings
   (`/WX`) and pass every suite.
 - UI changes include a before/after screenshot.
 

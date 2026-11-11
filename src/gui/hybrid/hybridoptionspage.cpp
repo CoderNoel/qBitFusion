@@ -93,8 +93,8 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     accountLayout->addLayout(statusRow);
 
     auto *accountButtons = new QHBoxLayout;
-    m_signIn = new QPushButton(UIThemeManager::instance()->getIcon(u"network-connect"_s), tr("Sign in…"), m_accountBox);
-    m_token = new QPushButton(tr("Use private API token…"), m_accountBox);
+    m_signIn = new QPushButton(UIThemeManager::instance()->getIcon(u"network-connect"_s), tr("Sign in..."), m_accountBox);
+    m_token = new QPushButton(tr("Use private API token..."), m_accountBox);
     m_signOut = new QPushButton(UIThemeManager::instance()->getIcon(u"system-log-out"_s), tr("Sign out"), m_accountBox);
     accountButtons->addWidget(m_signIn);
     accountButtons->addWidget(m_signOut);
@@ -152,7 +152,7 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     outer->setContentsMargins(0, 0, 0, 0);
     outer->addWidget(scroll);
 
-    // ---- behaviour
+    // ---- behavior
     connect(m_enabled, &QCheckBox::toggled, this, [this] { updateEnabledState(); emit changed(); });
     connect(m_picker, &SourcePicker::selectionChanged, this, &OptionsPage::changed);
     connect(m_remoteCreate, &QCheckBox::toggled, this, &OptionsPage::changed);
@@ -259,5 +259,5 @@ void HybridGui::OptionsPage::refreshAccount()
     m_accountDot->setText(dot);
     m_accountText->setText(text);
     m_signOut->setVisible(state != Hybrid::AccountState::NotConfigured);
-    m_signIn->setText((state == Hybrid::AccountState::Connected) ? tr("Switch account…") : tr("Sign in…"));
+    m_signIn->setText((state == Hybrid::AccountState::Connected) ? tr("Switch account...") : tr("Sign in..."));
 }

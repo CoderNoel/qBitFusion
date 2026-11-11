@@ -121,7 +121,7 @@ void Hybrid::PieceAssembly::fetchNext()
     if (m_done)
         return;
 
-    // Pad slices are already zero (buffer is zero-initialised); skip them.
+    // Pad slices are already zero (buffer is zero-initialized); skip them.
     while ((m_nextSlice < m_job.slices.size()) && m_job.slices.at(m_nextSlice).isPad)
         ++m_nextSlice;
 

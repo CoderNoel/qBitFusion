@@ -12,6 +12,12 @@
 
 .PARAMETER Libtorrent
   libtorrent tag to build (default 2.1.2, the pinned baseline).
+
+.PARAMETER QtVersion
+  Qt version to install (default 6.10.3, the version the Windows workflow uses).
+
+.PARAMETER Boost
+  Boost version whose headers are staged (default 1.91.0).
 #>
 param(
     [string]$Libtorrent = "2.1.2",
@@ -57,16 +63,16 @@ Set-Content -Path "$overlay/$triplet.cmake" -Value @(
 
 # --- Boost headers -----------------------------------------------------------------------------
 $boostDir = Join-Path $deps "boost"
-$bu = $Boost -replace '\.', '_'
+$boostTag = $Boost -replace '\.', '_'
 Step "Boost $Boost"
 if (-not (Test-Path "$boostDir/lib/cmake")) {
-    $tgz = Join-Path $deps "boost_$bu.tar.gz"
+    $tgz = Join-Path $deps "boost_$boostTag.tar.gz"
     if (-not (Test-Path $tgz)) {
-        curl.exe -fL -o $tgz "https://archives.boost.io/release/$Boost/source/boost_$bu.tar.gz"
+        curl.exe -fL -o $tgz "https://archives.boost.io/release/$Boost/source/boost_$boostTag.tar.gz"
     }
     tar -xf $tgz -C $deps
     if (Test-Path $boostDir) { Remove-Item -Recurse -Force $boostDir }
-    Move-Item (Join-Path $deps "boost_$bu") $boostDir
+    Move-Item (Join-Path $deps "boost_$boostTag") $boostDir
     Push-Location $boostDir
     & "$vcpkg/installed/$triplet/tools/boost-build/b2.exe" stage toolset=msvc --stagedir=.\ --with-headers
     Pop-Location
@@ -110,7 +116,7 @@ if (-not (Test-Path "$ltInstall/lib/cmake/LibtorrentRasterbar")) {
     Remove-Item Env:CFLAGS, Env:CXXFLAGS, Env:LDFLAGS
 }
 
-# --- environment file consumed by build.ps1 --------------------------------------------------------
+# --- environment file read by the other scripts --------------------------------------------------------
 @{
     vcpkg      = $vcpkg
     triplet    = $triplet

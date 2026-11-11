@@ -256,7 +256,7 @@ OptionsDialog::OptionsDialog(IGUIApplication *app, QWidget *parent)
         auto *accentRow = new QWidget(m_checkModernAppearance->parentWidget());
         auto *accentLayout = new QHBoxLayout(accentRow);
         accentLayout->setContentsMargins(0, 0, 0, 0);
-        accentLayout->addWidget(new QLabel(tr("Accent colour:"), accentRow));
+        accentLayout->addWidget(new QLabel(tr("Accent color:"), accentRow));
         m_accentPicker = new Modern::AccentPicker(accentRow);
         accentLayout->addWidget(m_accentPicker, 1);
         if (auto *themeLayout = qobject_cast<QBoxLayout *>(m_checkModernAppearance->parentWidget()->layout()))

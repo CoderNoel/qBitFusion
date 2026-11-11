@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-  Export the approved artwork as Qt logos and a multi-resolution Windows icon.
-  Requires ImageMagick 7; does not redraw the approved lettering or gradient.
+  Export the logo artwork as Qt logos and a multi-resolution Windows icon.
+  Requires ImageMagick 7; does not redraw its lettering or gradient.
 #>
 param(
-    [string]$Source = "$PSScriptRoot/../design/logo/refinement-04/qf-upstream-style.png"
+    [string]$Source = "$PSScriptRoot/../design/logo/qbitfusion-logo-source.png"
 )
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
@@ -20,7 +20,7 @@ try {
     $glyph = Join-Path $scratch "glyph.png"
     $logo = Join-Path $brand "qbitfusion.png"
 
-    # Discard low-alpha specks outside the approved opaque disc, preserving its original
+    # Discard low-alpha specks outside the opaque disc, preserving its original
     # antialiasing and every pixel of the lettering/gradient. No artistic reconstruction.
     & magick $sourceImage -alpha extract -threshold 50% -morphology Dilate Disk:2 $mask
     & magick $sourceImage -alpha extract $mask -compose Multiply -composite $alpha
@@ -40,7 +40,7 @@ try {
             -compose CopyOpacity -composite -filter Lanczos -resize 256x256 -strip `
             -define png:color-type=6 (Join-Path $brand "tray-$($variant[0]).png")
     }
-    Write-Host "Exported approved qf logo, 15-size Windows ICO, and light/dark monochrome tray icons."
+    Write-Host "Exported the qf logo, 15-size Windows ICO, and light/dark monochrome tray icons."
 }
 finally {
     # Only delete the unique scratch directory inside this checkout's build directory.

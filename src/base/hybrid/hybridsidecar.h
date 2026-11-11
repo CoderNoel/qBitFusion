@@ -59,7 +59,7 @@ namespace Hybrid
 
     QByteArray serializeSidecar(const SidecarData &data);
     // Unknown future fields are ignored; corrupt or secret-looking content is rejected (caller
-    // falls back to defaults, which are the safest: torrent_only is upstream behaviour).
+    // falls back to defaults, which are the safest: torrent_only is upstream behavior).
     nonstd::expected<SidecarData, QString> parseSidecar(const QByteArray &json);
 
     bool isSafeIdentifier(const QString &value);

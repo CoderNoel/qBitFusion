@@ -36,7 +36,7 @@
 // OS credential storage boundary (spec 07 section B). Secrets never touch .ini files, logs,
 // resume data or sidecars. Windows: Credential Manager (DPAPI-protected, per user).
 // Other platforms: no persistent store without new dependencies yet, so secrets live in memory for
-// the session only (fails closed rather than writing plaintext). See REPO_RECON.md.
+// the session only (fails closed rather than writing plaintext). See docs/INTEGRATION-NOTES.md.
 
 namespace Hybrid::SecureStore
 {

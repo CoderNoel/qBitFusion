@@ -32,7 +32,7 @@ git switch -c merge/release-5.3.1
 git merge release-5.3.1
 ```
 
-Resolve conflicts, then build, run every test and check the feature-off behaviour before opening a pull
+Resolve conflicts, then build, run every test and check the feature-off behavior before opening a pull
 request:
 
 ```powershell
@@ -55,7 +55,7 @@ It also edits about 60 upstream files. The ones that carry the largest changes, 
 of a conflict:
 
 | File | Why it was changed | How to resolve a conflict |
-|---|---|---|
+| --- | --- | --- |
 | `src/gui/addnewtorrentdialog.ui`, `.cpp` | The dialog layout was rebuilt (same object names). | Keep this fork's layout, then add any widget upstream introduced by hand. |
 | `src/gui/mainwindow.cpp` | Header and action bar replace the menu bar and toolbar. | Keep both sides; new upstream menu actions appear in the overflow menu automatically. |
 | `src/base/bittorrent/sessionimpl.cpp`, `torrentimpl.cpp` | Small hooks: hold at add/load, piece alerts, recheck, HTTPS rate. | Re-apply the hooks around upstream's new code. They are marked with `qBitFusion:` comments. |

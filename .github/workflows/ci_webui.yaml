@@ -2,7 +2,7 @@ name: CI - WebUI
 
 on: [pull_request, push]
 
-# The repository is private: the job token needs an explicit read grant to check it out.
+# Reading the repository is all a job may do unless it asks for more below.
 permissions:
   contents: read
 
@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
       security-events: write
 
     defaults:

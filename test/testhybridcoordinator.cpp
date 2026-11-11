@@ -315,7 +315,7 @@ private:
         FixtureProvider provider;
         std::unique_ptr<lt::session> ses;
         LtSink sink;
-        QNetworkAccessManager nam;
+        QNetworkAccessManager network;
         TransferBudget budget {8, 4 * PIECE};
         TokenBucket bucket;
         std::unique_ptr<HybridCoordinator> coord;
@@ -366,7 +366,7 @@ private:
         QTRY_VERIFY_WITH_TIMEOUT(r.sink.handle.status({}).state != lt::torrent_status::checking_resume_data
                 && r.sink.handle.status({}).state != lt::torrent_status::checking_files, 10000);
 
-        r.coord = std::make_unique<HybridCoordinator>(&r.sink, &r.provider, &r.nam, &r.budget, &r.bucket, config, now);
+        r.coord = std::make_unique<HybridCoordinator>(&r.sink, &r.provider, &r.network, &r.budget, &r.bucket, config, now);
         r.pump.setInterval(5);
         connect(&r.pump, &QTimer::timeout, r.coord.get(), [&r]
         {

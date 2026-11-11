@@ -44,9 +44,9 @@ namespace ModernAppearance
 {
     enum class Tone
     {
-        Text,       // default icon colour
+        Text,       // default icon color
         Muted,      // secondary text and inactive states
-        Accent,     // the one accent colour
+        Accent,     // the one accent color
         Info,       // downloading
         Success,    // seeding, completed, connected
         Warning,    // stalled, queued, firewalled
@@ -65,21 +65,21 @@ namespace ModernAppearance
     // Opacity of the accent tint used for selected rows, tabs and pages.
     qreal selectionAlpha();
 
-    // The widget style for the modern look: the named base style with a few behaviour tweaks.
+    // The widget style for the modern look: the named base style with a few behavior tweaks.
     QStyle *createStyle(const QString &baseStyleName);
 
     void apply(bool dark);
 
-    // The accent colour tints selection, progress, focus and "on" states. The user picks it in
-    // Options; an invalid colour means the default. Setting it re-applies the look immediately.
+    // The accent color tints selection, progress, focus and "on" states. The user picks it in
+    // Options; an invalid color means the default. Setting it re-applies the look immediately.
     QColor defaultAccent();
     QColor accentSetting();
     void setAccentSetting(const QColor &color);
     QPalette palette(bool dark);
     QColor color(Tone tone);
 
-    // Colour for a UI theme colour id ("TransferList.Downloading", "PiecesBar.Piece", ...), or an
-    // invalid colour when the modern look has no opinion and the stock default should be used.
+    // Color for a UI theme color id ("TransferList.Downloading", "PiecesBar.Piece", ...), or an
+    // invalid color when the modern look has no opinion and the stock default should be used.
     QColor themeColor(const QString &colorId);
 
     // Icon from the qBitFusion set for a theme icon id, or a null icon when the set has none.

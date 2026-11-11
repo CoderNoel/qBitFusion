@@ -57,7 +57,7 @@ void StacktraceDialog::setText(const QString &signalName, const QString &stacktr
         "</font></b></p>"
         "<font size=4><p>"
         "This is a qBitFusion build, not stock qBittorrent. Please do not report this crash "
-        "to the qBittorrent project. Keep the following information for whoever maintains your qBitFusion build:"
+        "to the qBittorrent project. Please report it at https://github.com/CoderNoel/qBitFusion/issues with the following information:"
         "</p></font>"
         "<br/><hr><br/>"
         "<p align=center><font size=4>"

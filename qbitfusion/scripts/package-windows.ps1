@@ -52,7 +52,7 @@ $crt = Get-ChildItem "$vsPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory
 if (-not $crt) { throw "MSVC x64 CRT redist folder not found under $vsPath." }
 Copy-Item (Join-Path $crt.FullName "*.dll") $stage
 
-# Licence texts travel with the binary.
+# License texts travel with the binary.
 foreach ($file in "COPYING", "COPYING.GPLv2", "COPYING.GPLv3", "AUTHORS") {
     Copy-Item (Join-Path $repo $file) (Join-Path $stage "$file.txt")
 }
@@ -74,14 +74,15 @@ SETTINGS
   qBittorrent's own settings location.
 
 STATUS
-  Experimental. Windows only, one debrid provider (Real-Debrid). See the project
-  page for what has and has not been verified.
+  Experimental. Windows only, one debrid provider (Real-Debrid). What has and has
+  not been verified is listed on the project page:
+  https://github.com/CoderNoel/qBitFusion
 
-LICENCE
+LICENSE
   qBitFusion is a fork of qBittorrent and is licensed under the GNU General Public
   License, version 2 or later, with the OpenSSL linking exception. See COPYING.txt.
   The source code for this build is the commit named above in the project's
-  repository. qBitFusion is not affiliated with or endorsed by the qBittorrent project.
+  repository, https://github.com/CoderNoel/qBitFusion. qBitFusion is not affiliated with or endorsed by the qBittorrent project.
 
   This package also contains:
     Qt 6 (LGPL v3)                       https://www.qt.io/

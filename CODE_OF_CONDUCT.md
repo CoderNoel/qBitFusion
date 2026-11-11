@@ -9,11 +9,11 @@ Everyone who takes part in qBitFusion, in issues, pull requests, discussions or 
 is expected to:
 
 - be respectful and patient, including with people who are new or who disagree;
-- criticise ideas and code, not people;
+- criticize ideas and code, not people;
 - accept that maintainers are volunteers and may be slow or say no;
 - keep discussion on the project.
 
-Not acceptable: harassment, insults or personal attacks, discriminatory language or imagery, sexualised
+Not acceptable: harassment, insults or personal attacks, discriminatory language or imagery, sexualized
 content, publishing someone's private information, and threats of any kind.
 
 Two rules are specific to this project:
@@ -24,7 +24,7 @@ Two rules are specific to this project:
 
 ## Reporting
 
-If someone's behaviour breaks these rules, report it privately to the maintainers, either through the
+If someone's behavior breaks these rules, report it privately to the maintainers, either through the
 contact details on the repository owner's GitHub profile or with GitHub's "Report content" option on the
 comment or issue concerned. Reports are kept confidential.
 

@@ -56,7 +56,7 @@ private slots:
         TransportStateMachine m;
         const auto c = ctx(TransportPolicy::TorrentOnly, false);
         QCOMPARE(m.handle(E::Enable, c).to, S::Disabled);
-        QVERIFY(swarmAllowed(m.state(), c)); // upstream behaviour (I7)
+        QVERIFY(swarmAllowed(m.state(), c)); // upstream behavior (I7)
     }
 
     void happyPathHttp() const

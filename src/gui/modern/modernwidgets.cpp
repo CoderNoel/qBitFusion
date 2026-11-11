@@ -30,6 +30,7 @@
 
 #include <algorithm>
 
+#include <QtVersionChecks>
 #include <QAbstractItemModel>
 #include <QAbstractItemView>
 #include <QAction>
@@ -59,11 +60,13 @@ namespace
         return color;
     }
 
-    // Counts are plain tabular figures in the secondary colour: quiet, and they line up in a column.
+    // Counts are plain tabular figures in the secondary color: quiet, and they line up in a column.
     QFont countFont(const QFont &base)
     {
         QFont font = base;
-        font.setFeature(QFont::Tag("tnum"), 1);
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 7, 0))
+        font.setFeature(QFont::Tag("tnum"), 1);   // tabular figures: digits keep their width
+#endif
         return font;
     }
 
@@ -387,7 +390,7 @@ namespace
         {QT_TRANSLATE_NOOP("Modern::AccentPicker", "Graphite"), 0xff737373}
     };
 
-    // A round colour chip; the chosen one gets a ring.
+    // A round color chip; the chosen one gets a ring.
     class Swatch final : public QAbstractButton
     {
     public:
@@ -461,8 +464,8 @@ Modern::AccentPicker::AccentPicker(QWidget *parent)
         });
     }
 
-    // A custom colour shows as one more chip.
-    auto *customSwatch = new Swatch(effective, tr("Custom colour"), this);
+    // A custom color shows as one more chip.
+    auto *customSwatch = new Swatch(effective, tr("Custom color"), this);
     customSwatch->setVisible(!matched);
     customSwatch->setChecked(!matched);
     layout->addWidget(customSwatch);
@@ -478,7 +481,7 @@ Modern::AccentPicker::AccentPicker(QWidget *parent)
     layout->addStretch();
     connect(customButton, &QPushButton::clicked, this, [this, customSwatch]
     {
-        const QColor picked = QColorDialog::getColor(m_color, this, tr("Accent colour"));
+        const QColor picked = QColorDialog::getColor(m_color, this, tr("Accent color"));
         if (!picked.isValid())
             return;
         customSwatch->setColor(picked);

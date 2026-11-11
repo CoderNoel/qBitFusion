@@ -2,6 +2,9 @@
 .SYNOPSIS
   Capture the visible top-level windows of one process to PNG using PrintWindow.
   Only that process's windows are captured — never the rest of the desktop.
+.EXAMPLE
+  $id = pwsh qbitfusion/scripts/test-instance.ps1
+  pwsh qbitfusion/scripts/capture-windows.ps1 -ProcessId $id -OutDir build/ui-smoke -Prefix check
 #>
 param(
     [Parameter(Mandatory)] [int]$ProcessId,

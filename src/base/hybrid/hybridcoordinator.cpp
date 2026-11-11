@@ -519,7 +519,7 @@ void Hybrid::HybridCoordinator::probe(const bool recovery)
         m_status.boundFileCount = static_cast<int>(m_binding.byNativeIndex.size());
         rebuildPieceCoverage();
 
-        // Coverage is decided per piece (ADR-009, qbitfusion/DECISIONS.md). A piece goes over HTTP
+        // Coverage is decided per piece (ADR-009, docs/DECISIONS.md). A piece goes over HTTP
         // only if the provider exposes every byte of it; a piece touching a file it does not expose (for
         // example a small text file sharing a piece with a large video) is left to peers. Such
         // pieces must never keep the provider from supplying everything else.

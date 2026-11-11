@@ -366,6 +366,19 @@
                </property>
               </widget>
              </item>
+             <item row="0" column="2">
+              <spacer name="horizontalSpacer_5">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>20</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
              <item row="1" column="0">
               <widget class="QCheckBox" name="sequentialCheckBox">
                <property name="text">
@@ -393,25 +406,12 @@
              <item row="2" column="1">
               <widget class="QCheckBox" name="doNotDeleteTorrentCheckBox">
                <property name="toolTip">
-                <string>When checked, the .torrent file will not be deleted regardless of the settings at the "Download" page of the Options dialog</string>
+                <string>When checked, the .torrent file will not be deleted regardless of the settings at the &quot;Download&quot; page of the Options dialog</string>
                </property>
                <property name="text">
                 <string>Do not delete .torrent file</string>
                </property>
               </widget>
-             </item>
-             <item row="0" column="2">
-              <spacer name="horizontalSpacer_5">
-               <property name="orientation">
-                <enum>Qt::Orientation::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>20</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
              </item>
             </layout>
            </item>

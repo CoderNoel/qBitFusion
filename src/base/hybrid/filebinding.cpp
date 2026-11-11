@@ -168,7 +168,7 @@ QString Hybrid::describe(const BindingError error)
     case BindingError::SizeMismatch:
         return QCoreApplication::translate("Hybrid", "Provider file size does not match the torrent");
     case BindingError::NoMatchingLayout:
-        return QCoreApplication::translate("Hybrid", "This debrid file does not match the torrent's file layout. No HTTP data will be used.");
+        return QCoreApplication::translate("Hybrid", "This debrid file does not match the torrent's file layout. No HTTPS data will be used.");
     }
     return {};
 }

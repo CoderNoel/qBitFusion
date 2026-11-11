@@ -35,7 +35,7 @@ namespace BitTorrent
 
     // Narrow, optional extension seam used by the qBitFusion hybrid transport (docs/SPECIFICATION.md 06).
     // Every hook is a no-op answer ("don't hold", "no piece alerts") unless a torrent has an
-    // explicit hybrid policy, which keeps feature-off behaviour identical to upstream (invariant I7).
+    // explicit hybrid policy, which keeps feature-off behavior identical to upstream (invariant I7).
     class HybridHooks
     {
     public:

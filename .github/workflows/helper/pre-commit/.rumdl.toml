@@ -11,3 +11,8 @@ disable = [
 
 [MD046]
 style = "fenced"
+
+# qBitFusion: the README centers its logo and title with HTML; the pull request template is a form, not a document.
+[per-file-ignores]
+"README.md" = ["MD033", "MD041"]
+".github/PULL_REQUEST_TEMPLATE.md" = ["MD041"]

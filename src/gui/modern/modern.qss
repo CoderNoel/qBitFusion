@@ -1,9 +1,9 @@
 /*
  * qBitFusion modern appearance.
  *
- * Design language: true-neutral surfaces, hairline dividers, small radii, and one accent colour
+ * Design language: true-neutral surfaces, hairline dividers, small radii, and one accent color
  * (palette(highlight), chosen by the user) for selection, progress, focus and "on" states. Hover is a
- * neutral overlay; selection is a light tint of the accent; primary buttons are inverse-neutral. Colours come from the application palette or from
+ * neutral overlay; selection is a light tint of the accent; primary buttons are inverse-neutral. Colors come from the application palette or from
  * the @tokens@ substituted per scheme in modernappearance.cpp, so this one sheet serves light and dark.
  */
 

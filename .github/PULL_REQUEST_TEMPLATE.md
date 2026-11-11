@@ -9,8 +9,8 @@
 ## Checklist
 
 - [ ] Builds without warnings and all test suites pass (`pwsh qbitfusion/scripts/build-windows.ps1`)
-- [ ] New behaviour and its failure paths have tests
-- [ ] With the hybrid feature off, behaviour is unchanged
+- [ ] New behavior and its failure paths have tests
+- [ ] With the hybrid feature off, behavior is unchanged
 - [ ] No tokens, signed links or personal data in code, tests, logs or screenshots
 - [ ] Changes to upstream files are small and marked with a `qBitFusion:` comment
 - [ ] UI changes: before/after screenshots attached

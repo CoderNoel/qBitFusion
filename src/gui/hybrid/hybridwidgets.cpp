@@ -164,7 +164,7 @@ QString HybridGui::sourceText(const Hybrid::HybridStatus &status)
         return QCoreApplication::translate("HybridGui", "BitTorrent · checking %1").arg(provider);
     case S::HttpDraining:
     case S::HttpReady:
-        return QCoreApplication::translate("HybridGui", "Switching…");
+        return QCoreApplication::translate("HybridGui", "Switching...");
     case S::WaitingForUser:
         if ((status.lastReason == Hybrid::Reason::ProviderUnauthorized) || (status.providerStatus == Hybrid::ProviderStatus::AuthenticationRequired))
             return QCoreApplication::translate("HybridGui", "Sign in to %1").arg(provider);
@@ -205,7 +205,7 @@ QString HybridGui::sourceToolTip(const Hybrid::HybridStatus &status)
                     .arg(status.peerOnlyPieces);
         }
     }
-    lines << QCoreApplication::translate("HybridGui", "HTTP ↓ %1 · %2 pieces verified from HTTPS")
+    lines << QCoreApplication::translate("HybridGui", "HTTPS ↓ %1 · %2 pieces verified")
             .arg(Utils::Misc::friendlyUnit(status.httpRateBps, true), QString::number(status.httpVerifiedPieces));
     if (status.httpHashFailures > 0)
         lines << QCoreApplication::translate("HybridGui", "Rejected by hash check: %1 pieces").arg(status.httpHashFailures);
@@ -312,7 +312,7 @@ void HybridGui::SourcePicker::updateDetails()
     switch (p)
     {
     case Hybrid::TransportPolicy::TorrentOnly:
-        text = tr("Standard BitTorrent behaviour. Downloads only from BitTorrent peers.");
+        text = tr("Standard BitTorrent behavior. Downloads only from BitTorrent peers.");
         break;
     case Hybrid::TransportPolicy::DebridOnly:
         text = tr("Downloads only over HTTPS from your debrid service. No peer, tracker, DHT or PEX connections are made for this torrent, and it will not seed.");
@@ -336,7 +336,7 @@ HybridGui::DeviceSignInDialog::DeviceSignInDialog(Hybrid::RealDebridProvider *pr
     , m_provider {provider}
     , m_step {new QLabel(this)}
     , m_code {new QLabel(this)}
-    , m_status {mutedLabel(tr("Requesting a sign-in code…"), this)}
+    , m_status {mutedLabel(tr("Requesting a sign-in code..."), this)}
     , m_progress {new QProgressBar(this)}
     , m_copy {new QPushButton(UIThemeManager::instance()->getIcon(u"edit-copy"_s), tr("Copy code"), this)}
     , m_open {new QPushButton(UIThemeManager::instance()->getIcon(u"application-url"_s), tr("Open sign-in page"), this)}

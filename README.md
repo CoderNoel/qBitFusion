@@ -15,9 +15,10 @@
 for one of them is staged, because the demo files were not on a debrid account.</sub>
 
 **Status: experimental.** It is built and tested on Windows only, supports one debrid provider
-(Real-Debrid), and has been run against a real account by one person. There are no releases yet; you build
-it from source. The [limitations](#limitations) are listed in full below, and most of them are open work
-that a pull request could take on.
+(Real-Debrid), and has been run against a real account by one person. Windows preview builds, when
+published, are on the Releases page and are not code-signed; otherwise you build it from source. The
+[limitations](#limitations) are listed in full below, and most of them are open work that a pull request
+could take on.
 
 ## The idea
 
@@ -32,15 +33,15 @@ layout and resume data, so the two kinds of source can be combined in one downlo
 
 ## Features
 
-**Hybrid download**
+### Hybrid download
 
 - Three sources, chosen per torrent when adding it and changeable later from the context menu:
 
-  | Source | Behaviour |
-  |---|---|
+  | Source | Behavior |
+  | --- | --- |
   | Debrid only | HTTPS from the provider. No tracker, DHT, PEX or peer connections for this torrent, including for magnet metadata. It does not seed. |
   | Debrid preferred, BitTorrent fallback | HTTPS for what the provider has, peers for the rest. Falling back requires consent, because peers see your IP address. |
-  | BitTorrent (standard) | Unchanged qBittorrent behaviour. |
+  | BitTorrent (standard) | Unchanged qBittorrent behavior. |
 
 - Provider data is verified piece by piece against the torrent's hashes. Data that does not match is
   discarded.
@@ -51,15 +52,15 @@ layout and resume data, so the two kinds of source can be combined in one downlo
   (for example "BitTorrent · not cached on Real-Debrid").
 - Provider credentials are stored in the Windows Credential Manager. Tokens and signed links are kept out
   of settings files and logs.
-- With the feature switched off, behaviour is the same as qBittorrent's.
+- With the feature switched off, behavior is the same as qBittorrent's.
 
 ![Add-torrent dialog](docs/screenshots/add-torrent.png)
 
-**Interface**
+### Interface
 
 - A header (pages, search, Add, quick toggles, one menu holding all the former menus) replaces the menu
   bar and toolbar. All of qBittorrent's functions are still there.
-- Light and dark schemes that follow the system, with a configurable accent colour.
+- Light and dark schemes that follow the system, with a configurable accent color.
 - A monochrome icon set, a reworked add-torrent dialog, and restyled Options pages.
 - Options > Behavior can switch back to the classic qBittorrent look.
 
@@ -79,7 +80,7 @@ What has been checked, and how:
 What is missing or unverified:
 
 | Area | Limitation |
-|---|---|
+| --- | --- |
 | Platforms | Only Windows 11 (MSVC, Qt 6.10.3, libtorrent 2.1.2) is built and tested. Linux and macOS have never been compiled. Other libtorrent versions are untested. |
 | Providers | Real-Debrid only. v2-only torrents cannot use it. |
 | Real-Debrid coverage | Not yet seen live: several selected files in one torrent, a link expiring during a transfer, OAuth token refresh, and adding a torrent to the account from the app. |
@@ -90,10 +91,10 @@ What is missing or unverified:
 | Web UI / Web API | No way to see or set the download source. |
 | Interface | Reviewed at 150% scaling in the dark scheme. The light scheme and a few dialogs were changed but not re-checked. Labels inherited from qBittorrent still use Title Case, and some Options rows are unevenly aligned. |
 | Translations | New text is English only. |
-| Distribution | No installers, no code signing, no update check. CI is configured for Windows but has not run yet. |
+| Distribution | A portable zip for Windows, built by `qbitfusion/scripts/package-windows.ps1`. No installer, no code signing, no update check. |
 
-[qbitfusion/STATUS.md](qbitfusion/STATUS.md) is the detailed version of this list,
-[qbitfusion/DECISIONS.md](qbitfusion/DECISIONS.md) records the design decisions and the live observations,
+[docs/STATUS.md](docs/STATUS.md) is the detailed version of this list,
+[docs/DECISIONS.md](docs/DECISIONS.md) records the design decisions and the live observations,
 and [docs/SPECIFICATION.md](docs/SPECIFICATION.md) is the design the transport was built from.
 
 ## Open work
@@ -115,7 +116,8 @@ These are self-contained enough for a pull request. Roughly in order of size:
 - **Web API and Web UI** — expose the source and its status.
 - **Packet-level privacy check** — a harness that adds a "Debrid only" torrent and proves that nothing
   leaves for trackers, DHT or peers.
-- **Releases** — an installer and a release workflow.
+- **Releases** — a signed installer and a release workflow. A script for a portable zip exists
+  (`qbitfusion/scripts/package-windows.ps1`).
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the build steps and the rules a change has to follow.
 
@@ -130,8 +132,11 @@ pwsh qbitfusion/scripts/bootstrap-windows.ps1
 # build and run all tests
 pwsh qbitfusion/scripts/build-windows.ps1
 
-# build the optimised app and install it for the current user
+# build the optimized app and install it for the current user
 pwsh qbitfusion/scripts/install-windows.ps1
+
+# or build a portable zip into build-package
+pwsh qbitfusion/scripts/package-windows.ps1 -Version 0.1.0-preview
 ```
 
 The installed copy keeps its settings in a `profile` folder beside the program. It does not read or change

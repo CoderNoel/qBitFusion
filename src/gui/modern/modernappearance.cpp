@@ -30,6 +30,7 @@
 
 #include <algorithm>
 
+#include <QtVersionChecks>
 #include <QApplication>
 #include <QFile>
 #include <QFont>
@@ -48,7 +49,7 @@
 
 using namespace Qt::Literals::StringLiterals;
 
-// Resources live in the static qbt_gui library and must be initialised explicitly.
+// Resources live in the static qbt_gui library and must be initialized explicitly.
 static void initModernResources()
 {
     Q_INIT_RESOURCE(modern);
@@ -70,8 +71,8 @@ namespace
     };
 
     // True-neutral surfaces and one accent ("ember" orange) that is used sparingly: progress, focus
-    // and "on" states. Primary buttons are inverse-neutral, not accent-coloured.
-    // Text colours meet WCAG AA against their surfaces.
+    // and "on" states. Primary buttons are inverse-neutral, not accent-colored.
+    // Text colors meet WCAG AA against their surfaces.
     const Scheme DARK {
         .window = QColor(0x15, 0x15, 0x15), .base = QColor(0x1b, 0x1b, 0x1b), .alternate = QColor(0x1f, 0x1f, 0x1f)
         , .button = QColor(0x24, 0x24, 0x24), .text = QColor(0xec, 0xec, 0xec), .placeholder = QColor(0x8f, 0x8f, 0x8f)
@@ -145,11 +146,11 @@ namespace
         return u"rgba(%1, %2, %3, %4)"_s.arg(color.red()).arg(color.green()).arg(color.blue()).arg(alpha);
     }
 
-    // Semantic tint per theme icon id. Everything not listed uses the plain icon colour.
+    // Semantic tint per theme icon id. Everything not listed uses the plain icon color.
     Tone toneFor(const QString &iconId)
     {
         static const QHash<QString, Tone> tones {
-            // Only state indicators carry colour. Icons of actions (menus, buttons) stay neutral.
+            // Only state indicators carry color. Icons of actions (menus, buttons) stay neutral.
             {u"downloading"_s, Tone::Info}, {u"filter-active"_s, Tone::Info},
             {u"upload"_s, Tone::Success}, {u"checked-completed"_s, Tone::Success}, {u"connected"_s, Tone::Success},
             {u"stalledUP"_s, Tone::Muted}, {u"stopped"_s, Tone::Muted}, {u"paused"_s, Tone::Muted},
@@ -162,7 +163,7 @@ namespace
         return tones.value(iconId, Tone::Text);
     }
 
-    // Renders a monochrome SVG in the colour of its tone for the scheme that is current when painted,
+    // Renders a monochrome SVG in the color of its tone for the scheme that is current when painted,
     // so icons already handed out follow light/dark switches without being recreated.
     class TintedSvgEngine final : public QIconEngine
     {
@@ -331,7 +332,7 @@ QStyle *ModernAppearance::createStyle(const QString &baseStyleName)
 
 QColor ModernAppearance::defaultAccent()
 {
-    return {0xff, 0x5b, 0x2e};   // ember orange, the colour of the logo
+    return {0xff, 0x5b, 0x2e};   // ember orange, the color of the logo
 }
 
 QColor ModernAppearance::accentSetting()
@@ -481,7 +482,7 @@ void ModernAppearance::apply(const bool dark)
     if (qss.isEmpty())
         return;
 
-    // A few colours cannot be expressed as palette roles (translucent tints and semantic colours):
+    // A few colors cannot be expressed as palette roles (translucent tints and semantic colors):
     // substitute per-scheme tokens. Everything else in the sheet follows the palette.
     const Scheme &s = scheme();
     QString sheet = QString::fromUtf8(qss);
@@ -510,7 +511,7 @@ QIcon ModernAppearance::icon(const QString &iconId, const bool forDarkSurface)
 {
     initModernResources();
 
-    // Brand marks keep their own colours.
+    // Brand marks keep their own colors.
     if ((iconId == u"qbittorrent") || (iconId == u"qbittorrent-tray") || (iconId == u"qbittorrent_mac"))
         return QIcon(u":/qbitfusion/brand/qbitfusion.png"_s);
 
@@ -544,7 +545,9 @@ void ModernAppearance::paintProgress(QPainter *painter, const QRect &cellRect, c
     painter->setRenderHint(QPainter::Antialiasing, true);
 
     QFont font = painter->font();
-    font.setFeature(QFont::Tag("tnum"), 1);
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 7, 0))
+    font.setFeature(QFont::Tag("tnum"), 1);   // tabular figures: digits keep their width
+#endif
     painter->setFont(font);
     const QFontMetrics metrics {font};
     const int textWidth = metrics.horizontalAdvance(u"100.0%"_s) + 2;
@@ -560,7 +563,7 @@ void ModernAppearance::paintProgress(QPainter *painter, const QRect &cellRect, c
         const qreal height = 6;
         const QRectF track {static_cast<qreal>(content.left()), content.center().y() - (height / 2) + 0.5
             , static_cast<qreal>(content.width() - textWidth - 10), height};
-        // The track is drawn from the text colour so that it stays visible on a selected (tinted) row.
+        // The track is drawn from the text color so that it stays visible on a selected (tinted) row.
         QColor trackColor = pal.color(QPalette::Text);
         trackColor.setAlphaF(g_dark ? 0.16 : 0.12);
         painter->setPen(Qt::NoPen);
