@@ -15,9 +15,9 @@ jobs:
     name: Check
     runs-on: ubuntu-slim
     permissions:
-      contents: read
-      actions: read
-      security-events: write
+      contents: read  # check out the repository
+      actions: read  # CodeQL reads the workflow run
+      security-events: write  # upload code-scanning results
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

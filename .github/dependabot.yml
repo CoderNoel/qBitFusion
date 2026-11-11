@@ -13,3 +13,6 @@ updates:
           - "*"
     schedule:
       interval: "monthly"
+    # Wait a week before proposing a new version, so a bad release is noticed by others first.
+    cooldown:
+      default-days: 7

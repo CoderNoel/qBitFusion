@@ -17,8 +17,8 @@ jobs:
     name: Build
     runs-on: macos-latest
     permissions:
-      contents: read
-      actions: write
+      contents: read  # check out the repository
+      actions: write  # store and clean up build caches
 
     strategy:
       fail-fast: false

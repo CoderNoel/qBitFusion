@@ -10,13 +10,17 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   check:
     name: Check for a newer upstream release
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      issues: write
+      contents: read  # check out the repository
+      issues: write  # open the notice issue
 
     steps:
       - name: Checkout repository

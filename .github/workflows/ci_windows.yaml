@@ -15,8 +15,8 @@ jobs:
     name: Build (${{ matrix.libtorrent.version }}, ${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.os }}
     permissions:
-      contents: read
-      actions: write
+      contents: read  # check out the repository
+      actions: write  # store and clean up build caches
 
     strategy:
       fail-fast: false
