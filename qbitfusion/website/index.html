@@ -3,15 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>qBitFusion: debrid and BitTorrent in one verified download</title>
-    <meta name="description" content="A fork of qBittorrent 5.3 that downloads a torrent from a debrid account over HTTPS and from BitTorrent peers, and checks every piece against the torrent's hashes.">
+    <title>qBitFusion: one download, from your debrid service and the torrent swarm</title>
+    <meta name="description" content="A torrent app that can also fetch the same files from your debrid service. It switches between the two when one drops out, and never starts over.">
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark light">
     <link rel="canonical" href="https://qbitfusion.org/">
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="qBitFusion">
-    <meta property="og:description" content="Debrid over HTTPS and BitTorrent peers. One hash-verified download.">
+    <meta property="og:description" content="One download, two ways to finish it: your debrid service and the torrent swarm.">
     <meta property="og:url" content="https://qbitfusion.org/">
     <meta property="og:image" content="https://qbitfusion.org/assets/og.png">
     <meta property="og:image:width" content="1200">
@@ -34,7 +34,8 @@
                 <span>qBitFusion</span>
             </a>
             <ul class="nav-links">
-                <li><a href="#how">How it works</a></li>
+                <li><a href="#flow">How it works</a></li>
+                <li><a href="#modes">Modes</a></li>
                 <li><a href="#features">Features</a></li>
                 <li><a href="#interface">Interface</a></li>
                 <li><a href="#status">Status</a></li>
@@ -54,14 +55,15 @@
         <section class="hero theme-dark" id="top">
             <div class="wrap hero-copy">
                 <p class="eyebrow reveal">Experimental preview for Windows</p>
-                <h1 class="display reveal">One torrent.<br><span class="ember-text">Two ways in.</span></h1>
+                <h1 class="display reveal">One download.<br><span class="ember-text">Two ways to finish it.</span></h1>
                 <p class="lede reveal">
-                    qBitFusion is a fork of qBittorrent 5.3 that downloads a torrent from your debrid account over
-                    HTTPS and from BitTorrent peers, and checks every piece against the torrent's own hashes.
+                    qBitFusion is a torrent app that can also fetch the same files from your debrid service. It uses
+                    the service when it can, turns to the torrent swarm when it can't, and carries on from exactly
+                    where it was. Nothing starts over.
                 </p>
                 <div class="ctas reveal">
                     <a class="btn" href="#download">Download</a>
-                    <a class="link-chevron" href="https://github.com/CoderNoel/qBitFusion">View the source on GitHub</a>
+                    <a class="link-chevron" href="#flow">See how it works</a>
                 </div>
             </div>
 
@@ -76,45 +78,120 @@
             </figure>
         </section>
 
-        <!-- The idea -->
-        <section class="statement theme-light" id="idea">
-            <div class="wrap-narrow">
-                <p class="eyebrow">The idea</p>
-                <p class="statement-text" data-statement>
-                    <span>A debrid service already holds a copy of the files.</span>
-                    <span>The usual way to use one is a separate downloader, and the files you get are cut off from the torrent.</span>
-                    <strong>qBitFusion makes the provider one more source for the torrent itself.</strong>
-                    <span>It requests byte ranges, builds them into pieces, and hands each piece to libtorrent,</span>
-                    <strong>which checks it the same way it checks a piece from a peer.</strong>
-                </p>
+        <!-- New to debrid? -->
+        <section class="primer theme-light" id="debrid">
+            <div class="wrap">
+                <header class="section-head reveal">
+                    <p class="eyebrow">New to debrid?</p>
+                    <h2 class="headline">Torrents depend on people.<br><span class="muted">Debrid services don't.</span></h2>
+                    <p class="section-lede">A torrent downloads from whoever happens to be sharing it. When only a few
+                        people are, it crawls, or stalls at 97% for good. A debrid service is a paid service with fast
+                        servers that fetch the torrent for you and hand you the files as an ordinary download.</p>
+                    <p class="skip-ahead"><a class="link-chevron" href="#flow">Already use one? Skip to what's new</a></p>
+                </header>
+
+                <div class="compare reveal" data-compare>
+                    <figure class="compare-panel">
+                        <figcaption><strong>A torrent on its own</strong><span>Only as fast as the people sharing it.</span></figcaption>
+                        <svg class="compare-art" viewBox="0 0 480 300" role="img" aria-label="Illustration: one of four peers is online and sends pieces slowly to your computer." data-compare-art="alone"></svg>
+                    </figure>
+                    <figure class="compare-panel">
+                        <figcaption><strong>With a debrid service</strong><span>Its servers already have the files.</span></figcaption>
+                        <svg class="compare-art" viewBox="0 0 480 300" role="img" aria-label="Illustration: the debrid service's server already holds the files and sends them to your computer quickly." data-compare-art="debrid"></svg>
+                    </figure>
+                </div>
+
+                <ol class="steps-three reveal">
+                    <li><b>You hand it a torrent.</b> A magnet link or a .torrent file, the same as always.</li>
+                    <li><b>Its servers fetch it.</b> Popular files are often there already, because someone else asked
+                        first.</li>
+                    <li><b>You download it like a web file.</b> Over HTTPS, at your connection's speed, and peers never
+                        see your IP address. The service does see what you download.</li>
+                </ol>
+
+                <p class="primer-catch reveal">The catch: you usually pick one or the other. A debrid download happens
+                    in a separate app, cut off from the torrent, and if the service drops out halfway you start again
+                    somewhere else.</p>
             </div>
         </section>
 
-        <!-- How it works: interactive piece map -->
-        <section class="how theme-dark" id="how">
+        <!-- The flow -->
+        <section class="flow theme-dark" id="flow">
             <div class="wrap">
                 <header class="section-head reveal">
-                    <p class="eyebrow">How it works</p>
-                    <h2 class="headline">Choose a source per torrent.<br><span class="muted">Change it whenever you like.</span></h2>
+                    <p class="eyebrow">How qBitFusion works</p>
+                    <h2 class="headline">Your service and the swarm,<br><span class="ember-text">in one download.</span></h2>
+                    <p class="section-lede">qBitFusion treats your debrid service as one more source for the torrent
+                        itself. One source works at a time, and when it hands over to the other, everything already
+                        downloaded stays put.</p>
                 </header>
 
-                <div class="segmented reveal" role="tablist" aria-label="Download source" data-segmented>
+                <div class="flow-stage reveal" data-flow>
+                    <svg class="flow-art" role="img" aria-label="Animated illustration: a download starts from the debrid service, switches to the torrent swarm when the service drops out, switches back when it returns, and finishes with every piece checked." data-flow-art></svg>
+                    <div class="flow-controls">
+                        <button class="flow-play" type="button" data-flow-play aria-label="Pause the animation">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path data-icon-pause d="M4.5 3h2.5v10H4.5zM9 3h2.5v10H9z"/><path data-icon-play d="M5 3l8 5-8 5z" hidden/></svg>
+                        </button>
+                        <ol class="flow-steps" data-flow-steps>
+                            <li><button type="button" data-step="0"><span>1</span>Starts on your service</button></li>
+                            <li><button type="button" data-step="1"><span>2</span>The service drops out</button></li>
+                            <li><button type="button" data-step="2"><span>3</span>It comes back</button></li>
+                            <li><button type="button" data-step="3"><span>4</span>Done, all checked</button></li>
+                        </ol>
+                    </div>
+                    <p class="flow-caption" aria-live="polite" data-flow-caption></p>
+                    <p class="sim-note">An illustration of the behavior, not a recording. Speeds and timings are made up.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Modes: interactive piece map -->
+        <section class="how theme-dark" id="modes">
+            <div class="wrap">
+                <header class="section-head reveal">
+                    <p class="eyebrow">Your choice, per download</p>
+                    <h2 class="headline">Decide how each torrent<br><span class="muted">is allowed to download.</span></h2>
+                    <p class="section-lede">Pick a mode when you add a torrent, and change it later from its menu.</p>
+                </header>
+
+                <div class="segmented reveal" role="tablist" aria-label="Download mode" data-segmented>
                     <span class="segmented-thumb" aria-hidden="true"></span>
                     <button role="tab" type="button" aria-selected="false" data-mode="debrid">Debrid only</button>
                     <button role="tab" type="button" aria-selected="true" data-mode="preferred">Debrid preferred</button>
                     <button role="tab" type="button" aria-selected="false" data-mode="bittorrent">BitTorrent</button>
                 </div>
 
+                <div class="mode-copy" aria-live="polite">
+                    <article data-mode-copy="debrid" hidden>
+                        <h3>Debrid only, for privacy</h3>
+                        <p>Everything comes from your service. Your computer never connects to the torrent swarm, not
+                            even to look the torrent up, and it doesn't seed. If the service lacks part of it, the
+                            download stops and tells you.</p>
+                    </article>
+                    <article data-mode-copy="preferred">
+                        <h3>Debrid preferred, for getting it done</h3>
+                        <p>Your service supplies everything it has, and the swarm fills in the rest. Here the service is
+                            missing one file, so those pieces come from peers. Using the swarm needs your permission
+                            for that torrent, because peers can see your IP address. Without it, the download waits for
+                            your service instead.</p>
+                    </article>
+                    <article data-mode-copy="bittorrent" hidden>
+                        <h3>BitTorrent, as usual</h3>
+                        <p>A normal torrent download, exactly as in qBittorrent. Your debrid service isn't involved,
+                            and the torrent seeds as usual.</p>
+                    </article>
+                </div>
+
                 <div class="sim reveal" data-sim>
                     <div class="sim-sources">
                         <div class="source" data-source="https">
                             <span class="source-dot" aria-hidden="true"></span>
-                            <span class="source-name">HTTPS · Real-Debrid</span>
+                            <span class="source-name">Your debrid service</span>
                             <span class="source-state" data-state-https></span>
                         </div>
                         <div class="source" data-source="peers">
                             <span class="source-dot" aria-hidden="true"></span>
-                            <span class="source-name">BitTorrent peers</span>
+                            <span class="source-name">Torrent swarm</span>
                             <span class="source-state" data-state-peers></span>
                         </div>
                     </div>
@@ -124,35 +201,16 @@
                     <div class="sim-foot">
                         <div class="sim-progress">
                             <div class="bar"><span data-bar></span></div>
-                            <span class="sim-count" data-count>0 of 240 pieces verified</span>
+                            <span class="sim-count" data-count>0 of 240 pieces checked</span>
                         </div>
                         <ul class="legend">
-                            <li><i class="sw sw-https"></i>From HTTPS</li>
+                            <li><i class="sw sw-https"></i>From your service</li>
                             <li><i class="sw sw-peers"></i>From peers</li>
                             <li><i class="sw sw-flight"></i>Downloading</li>
-                            <li><i class="sw sw-bad"></i>Failed hash check</li>
+                            <li><i class="sw sw-bad"></i>Failed its check, fetched again</li>
                         </ul>
                     </div>
-                    <p class="sim-note">An illustration, not a recording. Piece counts and timings are made up.</p>
-                </div>
-
-                <div class="mode-copy" aria-live="polite">
-                    <article data-mode-copy="debrid" hidden>
-                        <h3>Debrid only</h3>
-                        <p>HTTPS from the provider and nothing else. No tracker, DHT, PEX or peer connections for this
-                            torrent, not even to fetch a magnet link's metadata. It does not seed.</p>
-                    </article>
-                    <article data-mode-copy="preferred">
-                        <h3>Debrid preferred, BitTorrent fallback</h3>
-                        <p>HTTPS for what the provider has, peers for the rest. Here the provider is missing one file,
-                            so those pieces come from the swarm. Falling back asks you first, because peers see your
-                            IP address.</p>
-                    </article>
-                    <article data-mode-copy="bittorrent" hidden>
-                        <h3>BitTorrent</h3>
-                        <p>Standard qBittorrent behavior, unchanged: peers only, and the torrent seeds as
-                            usual.</p>
-                    </article>
+                    <p class="sim-note">Each square is one piece of the file. An illustration, not a recording.</p>
                 </div>
             </div>
         </section>
@@ -162,7 +220,7 @@
             <div class="wrap">
                 <header class="section-head reveal">
                     <p class="eyebrow">Features</p>
-                    <h2 class="headline">The provider is a source.<br><span class="muted">libtorrent stays in charge.</span></h2>
+                    <h2 class="headline">The details that make it work.<br><span class="muted">And keep your files intact.</span></h2>
                 </header>
 
                 <div class="bento">
@@ -170,27 +228,28 @@
                         <div class="tile-art hash-row" aria-hidden="true">
                             <span class="ok"></span><span class="ok"></span><span class="ok"></span><span class="bad"></span><span class="ok"></span><span class="ok"></span><span class="ok"></span><span class="ok"></span>
                         </div>
-                        <h3>Verified, piece by piece.</h3>
-                        <p>Provider data is checked against the torrent's hashes before it counts. Data that doesn't
-                            match is thrown away and fetched again.</p>
+                        <h3>Every piece is checked.</h3>
+                        <p>A torrent carries a fingerprint for every small piece of its files. Pieces from your service
+                            are checked against it exactly like pieces from peers, and anything that doesn't match is
+                            thrown away and fetched again. Mixing sources can't corrupt your download.</p>
                     </article>
 
                     <article class="tile reveal">
-                        <div class="tile-figure">0<span>verified pieces lost</span></div>
-                        <h3>Progress survives a switch.</h3>
-                        <p>Verified pieces are kept when the source changes. A provider outage doesn't restart the
-                            download.</p>
+                        <div class="tile-figure">0<span>finished pieces lost</span></div>
+                        <h3>Switching never starts over.</h3>
+                        <p>Finished pieces stay finished when the source changes. If your service has an outage, the
+                            download doesn't restart.</p>
                     </article>
 
                     <article class="tile reveal">
                         <div class="tile-art files" aria-hidden="true">
-                            <div><span>Film</span><i class="fh"></i><em>HTTPS</em></div>
-                            <div><span>Extras</span><i class="fh short"></i><em>HTTPS</em></div>
+                            <div><span>Film</span><i class="fh"></i><em>Service</em></div>
+                            <div><span>Extras</span><i class="fh short"></i><em>Service</em></div>
                             <div><span>Subtitles</span><i class="fp shorter"></i><em>Peers</em></div>
                         </div>
-                        <h3>Coverage, decided per piece.</h3>
-                        <p>If the provider has only some of a torrent's files, it supplies the pieces it fully covers.
-                            Peers can do the rest.</p>
+                        <h3>Takes what your service has.</h3>
+                        <p>If your service has only some of a torrent's files, it supplies those, and peers can fill in
+                            the rest.</p>
                     </article>
 
                     <article class="tile reveal">
@@ -199,24 +258,25 @@
                             <span><svg viewBox="0 0 16 16"><path d="M5 13V3M2 6l3-3 3 3M11 3v10m-3-3 3 3 3-3"/></svg>HTTPS · Real-Debrid</span>
                             <span><svg viewBox="0 0 16 16"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 14c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5M11 2.6a2.5 2.5 0 0 1 0 4.8M12.5 9.8c1.3.6 2 2 2 4.2"/></svg>BitTorrent · not cached on Real-Debrid</span>
                         </div>
-                        <h3>It says where data comes from.</h3>
-                        <p>A Source column shows each torrent's source and, when it isn't the provider, why.</p>
+                        <h3>Always says where data comes from.</h3>
+                        <p>A Source column shows where each download is coming from and, when it isn't your service,
+                            why.</p>
                     </article>
 
                     <article class="tile reveal">
                         <div class="tile-art glyph" aria-hidden="true">
                             <svg viewBox="0 0 48 48" width="48" height="48"><rect x="9" y="21" width="30" height="21" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M16 21v-6a8 8 0 0 1 16 0v6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="31" r="2.6" fill="currentColor"/></svg>
                         </div>
-                        <h3>Tokens stay in Windows.</h3>
-                        <p>Provider credentials live in the Windows Credential Manager. Tokens and signed links are
-                            kept out of settings files and logs.</p>
+                        <h3>Your login stays locked away.</h3>
+                        <p>Your debrid login is kept in the Windows Credential Manager, never in settings files or
+                            logs.</p>
                     </article>
 
                     <article class="tile tile-full tile-dark reveal">
                         <div>
-                            <h3>Switched off, it's qBittorrent.</h3>
-                            <p>With the hybrid feature off, behavior matches qBittorrent's. It keeps its own profile
-                                and runs alongside a stock install without touching it.</p>
+                            <h3>Switched off, it's just qBittorrent.</h3>
+                            <p>Turn hybrid sources off and it behaves exactly like qBittorrent. It keeps its own
+                                settings and runs alongside a normal qBittorrent install without touching it.</p>
                         </div>
                         <div class="switch-demo" aria-hidden="true">
                             <span>Hybrid sources</span>
@@ -286,7 +346,7 @@
                 <div class="specs reveal">
                     <div class="spec"><h3>Platforms</h3><p>Built and tested on Windows 11 only (MSVC, Qt 6.10.3, libtorrent 2.1.2). Linux and macOS have never been compiled.</p></div>
                     <div class="spec"><h3>Providers</h3><p>Real-Debrid only. Torrents that are v2-only can't use it.</p></div>
-                    <div class="spec"><h3>Not yet seen live</h3><p>Several selected files in one torrent, a link expiring mid-transfer, OAuth token refresh, and adding a torrent to the account from the app.</p></div>
+                    <div class="spec"><h3>Not yet seen live</h3><p>Switching between the service and the swarm mid-download is covered by automated tests, but hasn't happened yet with a real account. Nor have several selected files in one torrent, a link expiring mid-transfer, OAuth token refresh, and adding a torrent to the account from the app.</p></div>
                     <div class="spec"><h3>Privacy</h3><p>"Debrid only makes no swarm connections" is enforced in code and tested at the API level, but not yet confirmed with a packet capture. Your provider still knows what you download.</p></div>
                     <div class="spec"><h3>Debrid only</h3><p>If the provider lacks part of a torrent, the download stops near the end and says so. It doesn't warn you at the start.</p></div>
                     <div class="spec"><h3>Speed</h3><p>Four parallel HTTPS requests per torrent by default. Whether that holds back fast connections hasn't been measured.</p></div>
