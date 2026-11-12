@@ -7,12 +7,13 @@
     <meta name="description" content="A fork of qBittorrent 5.3 that downloads a torrent from a debrid account over HTTPS and from BitTorrent peers, and checks every piece against the torrent's hashes.">
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark light">
+    <link rel="canonical" href="https://qbitfusion.org/">
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="qBitFusion">
     <meta property="og:description" content="Debrid over HTTPS and BitTorrent peers. One hash-verified download.">
-    <meta property="og:url" content="https://codernoel.github.io/qBitFusion/">
-    <meta property="og:image" content="https://codernoel.github.io/qBitFusion/assets/og.png">
+    <meta property="og:url" content="https://qbitfusion.org/">
+    <meta property="og:image" content="https://qbitfusion.org/assets/og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
@@ -292,7 +293,8 @@
                     <div class="spec"><h3>Statistics</h3><p>"Downloaded" and session totals count only bytes from peers. Progress, speed and ETA are correct.</p></div>
                     <div class="spec"><h3>Web UI and Web API</h3><p>No way to see or set the download source.</p></div>
                     <div class="spec"><h3>Translations</h3><p>New text is in English only.</p></div>
-                    <div class="spec"><h3>Distribution</h3><p>A portable zip. No installer, no code signing and no update check yet.</p></div>
+                    <div class="spec"><h3>Distribution</h3><p>A portable zip that updates itself. No installer and no code signing yet, so Windows SmartScreen warns on first start.</p></div>
+                    <div class="spec"><h3>Updates</h3><p>The updater can't yet roll back a version that installs fine and then fails to start. An upstream release that merges cleanly and passes the tests ships without anyone looking, and the tests don't download from a real provider.</p></div>
                 </div>
 
                 <p class="more reveal"><a class="link-chevron" href="https://github.com/CoderNoel/qBitFusion/blob/main/qbitfusion/docs/STATUS.md">Read the detailed status</a></p>
@@ -318,7 +320,8 @@
                     <li><span>Linux and macOS builds, with their credential stores</span><code>src/base/hybrid/securestore.cpp</code></li>
                     <li><span>Show and set the source in the Web UI and Web API</span><code>src/webui/</code></li>
                     <li><span>A packet-level check that "Debrid only" stays off the swarm</span><code>test/</code></li>
-                    <li><span>A release workflow, a signed installer and an update check</span><code>.github/workflows/</code></li>
+                    <li><span>An installer and code signing</span><code>.github/workflows/release.yaml</code></li>
+                    <li><span>Roll back an update that fails to start</span><code>src/base/selfupdate/</code></li>
                 </ol>
 
                 <div class="ctas reveal">
@@ -333,8 +336,9 @@
             <div class="wrap-narrow center">
                 <img class="download-logo reveal" src="assets/logo.png" width="96" height="96" alt="">
                 <h2 class="headline reveal">Try qBitFusion.</h2>
-                <p class="section-lede reveal">For Windows 10 and 11, 64-bit. It's portable: settings stay in a folder
-                    beside the program, and an existing qBittorrent profile is never read or changed.</p>
+                <p class="section-lede reveal">For Windows 10 and 11, 64-bit. It's portable and keeps itself up to date.
+                    Settings stay in a folder beside the program, and an existing qBittorrent profile is never read
+                    or changed.</p>
 
                 <div class="release reveal" data-release>
                     <div class="release-ready" data-release-ready hidden>

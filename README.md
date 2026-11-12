@@ -177,7 +177,7 @@ sits in a few places:
 | `src/base/selfupdate/` | The updater: signed update description, download, install. |
 | `qbitfusion/docs/` | This project's documentation: status, decisions, specification, releases, upstream guide. |
 | `qbitfusion/scripts/` | Windows scripts: toolchain, build, install, package, test instance. |
-| `qbitfusion/website/` | The [project website](https://codernoel.github.io/qBitFusion/), published to GitHub Pages. |
+| `qbitfusion/website/` | The [project website](https://qbitfusion.org/), published to GitHub Pages. |
 | `qbitfusion/spike/`, `qbitfusion/tests/`, `qbitfusion/design/` | The libtorrent feasibility spike, the branding check, the logo source. |
 
 Everything else is inherited, including some files that describe qBittorrent rather than this fork: `doc/`

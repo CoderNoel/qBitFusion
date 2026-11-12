@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Assemble the project website into a folder that can be served as-is.
 
 The site's own files live in qbitfusion/website/. The screenshots are not copied there; they are taken

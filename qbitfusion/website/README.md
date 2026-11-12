@@ -1,6 +1,6 @@
 # Website
 
-The project's website, published at <https://codernoel.github.io/qBitFusion/> by the
+The project's website, published at <https://qbitfusion.org/> by the
 [Website workflow](../../.github/workflows/website.yaml) whenever these files change on `main`.
 
 It is plain HTML, CSS and JavaScript with no build tools or dependencies. It loads no third-party fonts,
@@ -24,6 +24,13 @@ python -m http.server -d build-website 8000
 ```
 
 Then open <http://localhost:8000>.
+
+## Domain
+
+`qbitfusion.org` is registered at Namecheap and set as the custom domain in the repository's Pages
+settings (it is also a verified domain on the owner's GitHub account). Its DNS has the four GitHub Pages
+`A` and `AAAA` records for `@`, and `www` is a `CNAME` to `codernoel.github.io`. The old address,
+`codernoel.github.io/qBitFusion/`, redirects to it.
 
 ## Downloads
 
