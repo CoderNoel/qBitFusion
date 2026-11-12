@@ -51,7 +51,8 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          last=$(git tag --list "v${upstream}.*" | sed "s/^v${upstream}\.//" | grep -E '^[0-9]+$' | sort -n | tail -n 1)
+          # no earlier release on this upstream version is normal; grep then finds nothing
+          last=$(git tag --list "v${upstream}.*" | sed "s/^v${upstream}\.//" | { grep -E '^[0-9]+$' || true; } | sort -n | tail -n 1)
           revision=$(( ${last:-0} + 1 ))
           echo "Releasing ${upstream}.${revision}"
           {

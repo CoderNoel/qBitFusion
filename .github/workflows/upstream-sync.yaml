@@ -55,7 +55,7 @@ jobs:
           git remote add upstream https://github.com/qbittorrent/qBittorrent.git
           git fetch --quiet --tags upstream
 
-          stable() { grep -Ev 'alpha|beta|rc'; }
+          stable() { grep -Ev 'alpha|beta|rc' || true; }
           base="$(git describe --tags --abbrev=0 --match 'release-[0-9]*' HEAD)"
           series="${base%.*}"
           next_same="$(git tag --list "${series}.*" --sort=-v:refname | stable | head -n 1)"
