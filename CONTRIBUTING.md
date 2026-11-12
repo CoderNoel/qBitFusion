@@ -71,6 +71,7 @@ And for the code itself:
 - Add tests for new behavior and for its failure paths. A pull request must build without warnings
   (`/WX`) and pass every suite.
 - UI changes include a before/after screenshot.
+- Releases and the updater are described in [qbitfusion/docs/RELEASING.md](qbitfusion/docs/RELEASING.md).
 - Every pull request is also checked by the repository's pre-commit hooks (formatting, spelling, Markdown
   lint, `.ui` grid order). To run them yourself: `pip install prek`, then `prek run --all-files`.
 

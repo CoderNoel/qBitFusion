@@ -25,6 +25,7 @@ set(testFiles
     testhybridurlguard.cpp
     testorderedset.cpp
     testpath.cpp
+    testselfupdate.cpp
     testutilsbytearray.cpp
     testutilscompare.cpp
     testutilsdatetime.cpp

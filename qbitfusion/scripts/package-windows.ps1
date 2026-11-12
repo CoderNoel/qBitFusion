@@ -11,25 +11,37 @@
 .EXAMPLE
   pwsh qbitfusion/scripts/package-windows.ps1 -Version 0.1.0-preview
   pwsh qbitfusion/scripts/package-windows.ps1 -Version 0.1.0-preview -NoBuild   # package the existing Release build
+
+  In CI the build and Qt come from elsewhere:
+  pwsh qbitfusion/scripts/package-windows.ps1 -Version 5.3.0.1 -NoBuild -ExePath build/qbitfusion.exe -QtDir $env:QT_ROOT_DIR
+
+  A package built here locally is a development build (revision 0) and never updates itself. Packages
+  that update themselves come from the Release workflow, which sets the revision and signs the release.
 #>
 param(
     [Parameter(Mandatory)] [string]$Version,
     [string]$BuildDir = "build-release",
     [string]$OutDir = "build-package",
-    [switch]$NoBuild
+    [switch]$NoBuild,
+    # Program to package; default: <BuildDir>\qbitfusion.exe.
+    [string]$ExePath,
+    # Qt installation whose windeployqt and runtime are used; default: the one from bootstrap-windows.ps1.
+    [string]$QtDir
 )
 
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
 
 $repo = (Resolve-Path "$PSScriptRoot/../..").Path
-$tc = Get-Content (Join-Path $repo ".deps/toolchain.json") | ConvertFrom-Json
 $build = Join-Path $repo $BuildDir
+if (-not $QtDir) {
+    $QtDir = (Get-Content (Join-Path $repo ".deps/toolchain.json") | ConvertFrom-Json).qt
+}
 
 if (-not $NoBuild) {
     & (Join-Path $PSScriptRoot "build-windows.ps1") -Release -BuildDir $BuildDir
 }
-$builtExe = Join-Path $build "qbitfusion.exe"
+$builtExe = if ($ExePath) { (Resolve-Path $ExePath).Path } else { Join-Path $build "qbitfusion.exe" }
 if (-not (Test-Path $builtExe)) { throw "No Release build at $builtExe. Run without -NoBuild." }
 
 $name = "qBitFusion-$Version-windows-x64"
@@ -41,7 +53,7 @@ New-Item -ItemType Directory $stage -Force | Out-Null
 Copy-Item $builtExe $stage
 Copy-Item (Join-Path $repo "src/gui/modern/brand/qbitfusion.ico") $stage
 
-& (Join-Path $tc.qt "bin\windeployqt.exe") --release --no-translations --no-system-d3d-compiler `
+& (Join-Path $QtDir "bin\windeployqt.exe") --release --no-translations --no-system-d3d-compiler `
     --no-system-dxc-compiler --no-compiler-runtime `
     --no-opengl-sw --no-quick-import --dir $stage (Join-Path $stage "qbitfusion.exe") | Out-Null
 
@@ -68,11 +80,16 @@ RUN
   Windows may warn about an unknown publisher: the program is not code-signed.
 
 SETTINGS
-  Everything is kept in the "profile" folder next to the program. Keep that folder
-  when you replace the program with a newer package. qBitFusion does not read or
-  change the settings of a stock qBittorrent installation.
+  Everything is kept in the "profile" folder next to the program. qBitFusion does
+  not read or change the settings of a stock qBittorrent installation.
   Do not delete the "profile" folder: without it the program would use
   qBittorrent's own settings location.
+
+UPDATES
+  qBitFusion updates itself. It checks for a new version once a day, downloads it in
+  the background, verifies its signature, and installs it the next time it starts.
+  The "profile" folder is never touched. To turn this off: Options > Behavior >
+  "Keep qBitFusion up to date". The folder must stay writable for updates to work.
 
 STATUS
   Experimental. Windows only, one debrid provider (Real-Debrid). What has and has

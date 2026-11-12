@@ -69,12 +69,14 @@
 #include "base/bittorrent/session.h"
 #include "base/bittorrent/sessionstatus.h"
 #include "base/global.h"
+#include "base/logger.h"
 #include "base/net/downloadmanager.h"
 #include "base/path.h"
 #include "base/plugins/pluginsengine.h"
 #include "base/preferences.h"
 #include "base/rss/rss_folder.h"
 #include "base/rss/rss_session.h"
+#include "base/selfupdate/selfupdater.h"
 #include "base/utils/foreignapps.h"
 #include "base/utils/fs.h"
 #include "base/utils/misc.h"
@@ -392,7 +394,9 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     connect(m_ui->actionCheckForUpdates, &QAction::triggered, this, [this]() { checkProgramUpdate(true); });
-    m_ui->actionCheckForUpdates->setVisible(!ProgramUpdater::isDisabledForThisBuild());
+    // qBitFusion: its own updater replaces upstream's, which would offer stock qBittorrent.
+    m_ui->actionCheckForUpdates->setVisible(SelfUpdate::SelfUpdater::isSupported());
+    reportAppliedUpdate();
 
     // trigger an early check on startup
     if (pref->isUpdateCheckEnabled())
@@ -2284,7 +2288,12 @@ void MainWindow::refreshTrayIconTooltip()
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 void MainWindow::checkProgramUpdate(const bool invokedByUser)
 {
-    // qBitFusion has no update feed. Upstream's would offer stock qBittorrent and replace this build.
+    // qBitFusion: its own updater (base/selfupdate). Upstream's would offer stock qBittorrent.
+    if (SelfUpdate::SelfUpdater::isSupported())
+    {
+        checkSelfUpdate(invokedByUser);
+        return;
+    }
     if (ProgramUpdater::isDisabledForThisBuild())
         return;
 
@@ -2304,6 +2313,85 @@ void MainWindow::checkProgramUpdate(const bool invokedByUser)
     updater->checkForUpdates();
 }
 #endif
+
+void MainWindow::checkSelfUpdate(const bool invokedByUser)
+{
+    if (!m_selfUpdater)
+    {
+        m_selfUpdater = new SelfUpdate::SelfUpdater(this);
+        connect(m_selfUpdater, &SelfUpdate::SelfUpdater::finished, this
+                , [this](const SelfUpdate::SelfUpdater::Outcome outcome, const QString &detail)
+        {
+            m_ui->actionCheckForUpdates->setEnabled(true);
+            m_ui->actionCheckForUpdates->setText(tr("&Check for Updates"));
+            m_ui->actionCheckForUpdates->setToolTip(tr("Check for program updates"));
+            if (m_programUpdateTimer)
+                m_programUpdateTimer->start();
+
+            using Outcome = SelfUpdate::SelfUpdater::Outcome;
+            const bool userAsked = m_selfUpdateRequestedByUser;
+            m_selfUpdateRequestedByUser = false;
+
+            if ((outcome == Outcome::Ready) && (detail != m_announcedUpdateVersion))
+            {
+                m_announcedUpdateVersion = detail;
+                app()->desktopIntegration()->showNotification(tr("qBitFusion update ready")
+                        , tr("Version %1 will be installed the next time qBitFusion starts.").arg(detail));
+            }
+            if (!userAsked)
+                return;
+
+            QString text;
+            QMessageBox::Icon icon = QMessageBox::Information;
+            switch (outcome)
+            {
+            case Outcome::Current:
+                text = tr("You are using the latest version, %1.").arg(SelfUpdate::displayVersion());
+                break;
+            case Outcome::Ready:
+                text = tr("Version %1 has been downloaded and verified. It will be installed the next time qBitFusion starts.").arg(detail);
+                break;
+            case Outcome::Failed:
+                text = tr("Could not check for updates.") + u"\n\n"_s + detail;
+                icon = QMessageBox::Warning;
+                break;
+            }
+            auto *msgBox = new QMessageBox {icon, u"qBitFusion"_s, text, QMessageBox::Ok, this};
+            msgBox->setAttribute(Qt::WA_DeleteOnClose);
+            msgBox->setWindowModality(Qt::NonModal);
+            msgBox->show();
+        });
+    }
+
+    if (m_selfUpdater->isBusy())
+        return;
+    m_selfUpdateRequestedByUser = invokedByUser;
+    if (m_programUpdateTimer)
+        m_programUpdateTimer->stop();
+    m_ui->actionCheckForUpdates->setEnabled(false);
+    m_ui->actionCheckForUpdates->setText(tr("Checking for Updates..."));
+    m_ui->actionCheckForUpdates->setToolTip(tr("Already checking for program updates in the background"));
+    m_selfUpdater->check();
+}
+
+void MainWindow::reportAppliedUpdate()
+{
+    const std::optional<SelfUpdate::SelfUpdater::AppliedUpdate> applied = SelfUpdate::SelfUpdater::takeAppliedUpdate();
+    if (!applied)
+        return;
+
+    if (applied->ok)
+    {
+        LogMsg(tr("qBitFusion was updated to %1.").arg(applied->version));
+        app()->desktopIntegration()->showNotification(tr("qBitFusion updated"), tr("You are now using version %1.").arg(applied->version));
+    }
+    else
+    {
+        LogMsg(tr("Installing the qBitFusion update failed, and the previous version was kept. %1").arg(applied->error), Log::WARNING);
+        app()->desktopIntegration()->showNotification(tr("qBitFusion update failed")
+                , tr("The previous version was kept. Details are in the log."));
+    }
+}
 
 #ifdef Q_OS_WIN
 void MainWindow::installPython()

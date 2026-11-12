@@ -76,6 +76,9 @@ add_library(qbt_base STATIC
     hybrid/torrentpiecesink.h
     hybrid/transportstatemachine.h
     hybrid/urlguard.h
+    selfupdate/applyupdate.h
+    selfupdate/selfupdater.h
+    selfupdate/updatemanifest.h
     http/asyncfilesender.h
     http/connection.h
     http/constants.h
@@ -211,6 +214,9 @@ add_library(qbt_base STATIC
     hybrid/tokenbucket.cpp
     hybrid/transportstatemachine.cpp
     hybrid/urlguard.cpp
+    selfupdate/applyupdate.cpp
+    selfupdate/selfupdater.cpp
+    selfupdate/updatemanifest.cpp
     http/asyncfilesender.cpp
     http/connection.cpp
     http/httperror.cpp
@@ -271,6 +277,14 @@ add_library(qbt_base STATIC
     utils/thread.cpp
     utils/version.cpp
 )
+
+# qBitFusion: release revision on top of the upstream version, e.g. 5.3.0.<revision>. Set by the release
+# workflow. 0 means a development build, which never updates itself.
+set(QBF_REVISION 0 CACHE STRING "qBitFusion release revision")
+set_source_files_properties(selfupdate/updatemanifest.cpp PROPERTIES COMPILE_DEFINITIONS "QBF_REVISION=${QBF_REVISION}")
+if (WIN32)
+    target_link_libraries(qbt_base PRIVATE shell32)
+endif()
 
 target_link_libraries(qbt_base
     PRIVATE

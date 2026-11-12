@@ -38,6 +38,7 @@
 #include "base/unicodestrings.h"
 #include "base/utils/io.h"
 #include "base/utils/misc.h"
+#include "base/selfupdate/updatemanifest.h"
 #include "base/version.h"
 #include "ui_aboutdialog.h"
 #include "modern/modernappearance.h"
@@ -60,7 +61,7 @@ AboutDialog::AboutDialog(QWidget *parent)
     m_ui->setupUi(this);
 
     // Title
-    m_ui->labelName->setText(QStringLiteral("<b><h2>qBitFusion " QBT_VERSION " (%1-bit)</h2></b>").arg(QT_POINTER_SIZE * 8));
+    m_ui->labelName->setText(u"<b><h2>qBitFusion %1 (%2-bit)</h2></b>"_s.arg(SelfUpdate::displayVersion()).arg(QT_POINTER_SIZE * 8));
 
     m_ui->logo->setPixmap(UIThemeManager::instance()->getScaledPixmap(u"qbittorrent"_s, 40));
 

@@ -11,24 +11,36 @@ the two relate and how to bring upstream fixes into this repository.
   possible, it preserves the authorship of every upstream contributor, and it is the normal way to publish
   a fork of a GPL project.
 
-## What can and cannot be automatic
+## What happens automatically
 
-Upstream fixes do not arrive here by themselves. A person merges them, because qBitFusion changes some of
-the same files and a merge can conflict.
+The workflow [`upstream-sync.yaml`](../../.github/workflows/upstream-sync.yaml) runs once a day.
 
-What is automated: the workflow [`upstream-watch.yaml`](../../.github/workflows/upstream-watch.yaml) checks
-once a week whether upstream has published a newer release in the series this fork is based on, and opens
-an issue when it has. (Its check has run and works. The step that opens the issue has not been exercised
-yet, because there has been no newer release to report.)
+- **A newer qBittorrent release in the same series** (for example 5.3.1 while on 5.3.0) is merged on a
+  branch named `upstream/release-5.3.1`, and a pull request is opened.
+  - If it merged without conflicts, the Windows build and all tests run on it, and the pull request merges
+    itself when they pass. On its next run the workflow starts the [Release](RELEASING.md) workflow, and
+    installed copies update themselves. Nobody has to do anything.
+  - If it has conflicts, the pull request stays open for a person, or an agent working for one, to
+    resolve. The pull request's description says how.
+- **A new series** (5.4, 6.0) is always a pull request for review, even when it merges cleanly. A new series
+  can raise the required Qt, libtorrent and compiler versions, and the hooks in the session and torrent
+  classes have to be checked against the new code.
 
-## Merging an upstream release
+What this cannot catch: a clean merge with passing tests can still break something the tests do not cover.
+The hybrid transport's own tests run on every merge, but nothing here downloads a real torrent from a real
+provider. Watch the log of the first release after an upstream merge.
 
-Point releases of the same series (for example `release-5.3.1`) are the easy and recommended case.
+To stop automatic merging, delete the `gh pr merge ... --auto` line at the end of the workflow; every
+upstream release then waits as a pull request.
+
+## Merging by hand
+
+For a conflicting pull request, or to merge an upstream release before the daily run:
 
 ```bash
 git remote add upstream https://github.com/qbittorrent/qBittorrent.git   # once
 git fetch upstream --tags
-git switch -c merge/release-5.3.1
+git switch -c merge/release-5.3.1 origin/main
 git merge release-5.3.1
 ```
 
@@ -39,8 +51,8 @@ request:
 pwsh qbitfusion/scripts/build-windows.ps1
 ```
 
-A new minor or major series (5.4, 6.0) is a porting job, not a routine merge: the hooks in the session and
-torrent classes have to be re-checked against the new code, and the libtorrent and Qt versions may move.
+Merge the pull request with a **merge commit**, never squash or rebase: the merge commit is what tells git
+that the upstream release is included, so that the next one merges cleanly.
 
 ## Where conflicts are likely
 

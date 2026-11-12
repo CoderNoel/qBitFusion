@@ -1,0 +1,311 @@
+name: Release
+
+# Builds, tests, packages, signs and publishes a qBitFusion release for Windows. Installed copies find it
+# through update.json on the latest release and install it themselves.
+#
+# Started by hand (Actions > Release > Run workflow) for this project's own changes, and by
+# upstream-sync once a qBittorrent release has been merged. The version is the upstream version plus a
+# revision: the first release on qBittorrent 5.3.0 is 5.3.0.1, the next 5.3.0.2, and the first on 5.3.1
+# is 5.3.1.1.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    # The signing key is an environment secret: only jobs in this environment, on main, can read it.
+    environment: release
+    permissions:
+      contents: read  # read tags and the version
+    outputs:
+      skip: ${{ steps.version.outputs.skip }}
+      upstream: ${{ steps.version.outputs.upstream }}
+      revision: ${{ steps.version.outputs.revision }}
+      version: ${{ steps.version.outputs.version }}
+      previous: ${{ steps.version.outputs.previous }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Decide the version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          field() { sed -n "s/^#define QBT_VERSION_$1 \([0-9]*\).*/\1/p" src/base/version.h.in; }
+          upstream="$(field MAJOR).$(field MINOR).$(field BUGFIX)"
+          if git tag --points-at HEAD | grep -q '^v'; then
+            echo "This commit is already released as $(git tag --points-at HEAD | grep '^v' | head -n 1)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(git tag --list "v${upstream}.*" | sed "s/^v${upstream}\.//" | grep -E '^[0-9]+$' | sort -n | tail -n 1)
+          revision=$(( ${last:-0} + 1 ))
+          echo "Releasing ${upstream}.${revision}"
+          {
+            echo "skip=false"
+            echo "upstream=${upstream}"
+            echo "revision=${revision}"
+            echo "version=${upstream}.${revision}"
+            echo "previous=$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check the signing key
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.QBF_UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SIGNING_KEY}" ]; then
+            echo "::error::The secret QBF_UPDATE_SIGNING_KEY is missing from the release environment. See qbitfusion/docs/RELEASING.md."
+            exit 1
+          fi
+          key="${RUNNER_TEMP}/signing.pem"
+          printf '%s\n' "${SIGNING_KEY}" > "${key}"
+          # The key must match the public key built into the program, or installed copies would refuse the release.
+          derived=$(openssl pkey -in "${key}" -pubout -outform DER | tail -c 32 | base64 -w0)
+          expected=$(sed -n 's/.*UPDATE_PUBLIC_KEY = QByteArray::fromBase64("\([^"]*\)").*/\1/p' src/base/selfupdate/selfupdater.cpp)
+          rm -f "${key}"
+          if [ "${derived}" != "${expected}" ]; then
+            echo "::error::QBF_UPDATE_SIGNING_KEY does not match the public key in src/base/selfupdate/selfupdater.cpp."
+            exit 1
+          fi
+
+  release:
+    name: Release (${{ matrix.libtorrent.version }}, ${{ matrix.config.arch }})
+    needs: plan
+    if: needs.plan.outputs.skip != 'true'
+    environment: release
+    runs-on: ${{ matrix.config.os }}
+    permissions:
+      contents: write  # create the release and its tag
+      actions: write  # store and clean up build caches
+
+    strategy:
+      matrix:
+        libtorrent:
+          - version: "2.1.2"
+            boost_major_version: "1"
+            boost_minor_version: "91"
+            boost_patch_version: "0"
+            libt_build_flags: ""
+        config:
+        - os: windows-latest
+          arch: x64
+          qt_arch: win64_msvc2022_64
+
+    env:
+      boost_path: "${{ github.workspace }}/../boost"
+      libtorrent_path: "${{ github.workspace }}/../libtorrent"
+      vcpkg_path: "c:/vcpkg"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup devcmd
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: ${{ matrix.config.arch }}
+
+      - name: Install build tools
+        run: |
+          if ((Get-Command "ninja.exe" -ErrorAction SilentlyContinue) -eq $null)
+          {
+            choco install ninja
+          }
+          where.exe ninja
+          ninja --version
+
+      # https://learn.microsoft.com/en-us/vcpkg/users/binarycaching#gha
+      - name: Set variables for vcpkg
+        uses: actions/github-script@v9
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', (process.env.ACTIONS_CACHE_URL || ''));
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', (process.env.ACTIONS_RUNTIME_TOKEN || ''));
+
+      - name: Install dependencies with vcpkg
+        run: |
+          # create our own triplet
+          New-Item `
+            -Force `
+            -ItemType File `
+            -Path "${{ env.vcpkg_path }}/triplets_overlay/${{ matrix.config.arch }}-windows-static-md-release.cmake"
+          # OpenSSL isn't compatible with `/guard:cf` flag so we omit it for now, see: https://github.com/openssl/openssl/issues/22554
+          Add-Content `
+            -Path "${{ env.vcpkg_path }}/triplets_overlay/${{ matrix.config.arch }}-windows-static-md-release.cmake" `
+            -Value @("set(VCPKG_TARGET_ARCHITECTURE ${{ matrix.config.arch }})",
+              "set(VCPKG_LIBRARY_LINKAGE static)",
+              "set(VCPKG_CRT_LINKAGE dynamic)",
+              "set(VCPKG_BUILD_TYPE release)")
+          # clear buildtrees after each package installation to reduce disk space requirements
+          $packages = `
+            "boost-build:${{ matrix.config.arch }}-windows-static-md-release",
+            "openssl:${{ matrix.config.arch }}-windows-static-md-release",
+            "zlib:${{ matrix.config.arch }}-windows-static-md-release"
+          ${{ env.vcpkg_path }}/vcpkg.exe upgrade `
+            --no-dry-run `
+            --overlay-triplets="${{ env.vcpkg_path }}/triplets_overlay"
+          ${{ env.vcpkg_path }}/vcpkg.exe install `
+            --binarysource="clear;x-gha,readwrite" `
+            --clean-after-build `
+            --overlay-triplets="${{ env.vcpkg_path }}/triplets_overlay" `
+            $packages
+
+      - name: Install boost
+        run: |
+          $boost_url="https://archives.boost.io/release/${{ matrix.libtorrent.boost_major_version }}.${{ matrix.libtorrent.boost_minor_version }}.${{ matrix.libtorrent.boost_patch_version }}/source/boost_${{ matrix.libtorrent.boost_major_version }}_${{ matrix.libtorrent.boost_minor_version }}_${{ matrix.libtorrent.boost_patch_version }}.tar.gz"
+          $boost_url2="https://sourceforge.net/projects/boost/files/boost/${{ matrix.libtorrent.boost_major_version }}.${{ matrix.libtorrent.boost_minor_version }}.${{ matrix.libtorrent.boost_patch_version }}/boost_${{ matrix.libtorrent.boost_major_version }}_${{ matrix.libtorrent.boost_minor_version }}_${{ matrix.libtorrent.boost_patch_version }}.tar.gz"
+          curl -L -o "${{ runner.temp }}/boost.tar.gz" "$boost_url"
+          tar -xf "${{ runner.temp }}/boost.tar.gz" -C "${{ github.workspace }}/.."
+          if ($LastExitCode -ne 0)
+          {
+            curl -L -o "${{ runner.temp }}/boost.tar.gz" "$boost_url2"
+            tar -xf "${{ runner.temp }}/boost.tar.gz" -C "${{ github.workspace }}/.."
+          }
+          move "${{ github.workspace }}/../boost_*" "${{ env.boost_path }}"
+          cd "${{ env.boost_path }}"
+          #.\bootstrap.bat
+          ${{ env.vcpkg_path }}/installed/${{ matrix.config.arch }}-windows-static-md-release/tools/boost-build/b2.exe `
+            stage `
+            toolset=msvc `
+            --stagedir=.\ `
+            --with-headers
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.10.3"
+          arch: ${{ matrix.config.qt_arch }}
+          archives: qtbase qtsvg qttools
+          modules: qtimageformats
+          cache: true
+
+      - name: Install libtorrent
+        run: |
+          git clone `
+            --branch v${{ matrix.libtorrent.version }} `
+            --depth 1 `
+            --recurse-submodules `
+            https://github.com/arvidn/libtorrent.git `
+            ${{ env.libtorrent_path }}
+          cd ${{ env.libtorrent_path }}
+          $env:CFLAGS+=" /guard:cf"
+          $env:CXXFLAGS+=" /guard:cf"
+          $env:LDFLAGS+=" /GUARD:CF"
+          cmake `
+            -B build `
+            -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DCMAKE_CXX_STANDARD=20 `
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
+            -DCMAKE_INSTALL_PREFIX="${{ env.libtorrent_path }}/install" `
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.vcpkg_path }}/scripts/buildsystems/vcpkg.cmake" `
+            -DBOOST_ROOT="${{ env.boost_path }}/lib/cmake" `
+            -DBUILD_SHARED_LIBS=OFF `
+            -Ddeprecated-functions=OFF `
+            -Dstatic_runtime=OFF `
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.config.arch }}-windows-static-md-release `
+            ${{ matrix.libtorrent.libt_build_flags }}
+          cmake --build build
+          cmake --install build
+
+
+      - name: Build and test
+        run: |
+          $env:CXXFLAGS+="/WX"
+          cmake `
+            -B build `
+            -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.vcpkg_path }}/scripts/buildsystems/vcpkg.cmake" `
+            -DBOOST_ROOT="${{ env.boost_path }}/lib/cmake" `
+            -DLibtorrentRasterbar_DIR="${{ env.libtorrent_path }}/install/lib/cmake/LibtorrentRasterbar" `
+            -DMSVC_RUNTIME_DYNAMIC=ON `
+            -DTESTING=ON `
+            -DQBF_REVISION=${{ needs.plan.outputs.revision }} `
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.config.arch }}-windows-static-md-release
+          cmake --build build
+          cmake --build build --target check
+
+      - name: Package
+        run: |
+          pwsh qbitfusion/scripts/package-windows.ps1 `
+            -Version "${{ needs.plan.outputs.version }}" `
+            -NoBuild `
+            -ExePath build/qbitfusion.exe `
+            -QtDir "${{ env.QT_ROOT_DIR }}" `
+            -OutDir release-out
+
+      - name: Write and sign update.json
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.QBF_UPDATE_SIGNING_KEY }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          UPSTREAM: ${{ needs.plan.outputs.upstream }}
+        run: |
+          set -euo pipefail
+          cd release-out
+          zip="qBitFusion-${VERSION}-windows-x64.zip"
+          size=$(stat -c %s "${zip}")
+          sha=$(sha256sum "${zip}" | cut -d ' ' -f 1)
+          base="https://github.com/${GITHUB_REPOSITORY}/releases"
+          printf '{"format":1,"version":"%s","upstream":"%s","notes":"%s/tag/v%s","windows-x64":{"url":"%s/download/v%s/%s","size":%s,"sha256":"%s"}}' \
+            "${VERSION}" "${UPSTREAM}" "${base}" "${VERSION}" "${base}" "${VERSION}" "${zip}" "${size}" "${sha}" > update.json
+          key="${RUNNER_TEMP}/signing.pem"
+          printf '%s\n' "${SIGNING_KEY}" > "${key}"
+          openssl pkeyutl -sign -rawin -inkey "${key}" -in update.json -out update.sig.bin
+          openssl pkey -in "${key}" -pubout -out "${RUNNER_TEMP}/public.pem"
+          rm -f "${key}"
+          openssl pkeyutl -verify -rawin -pubin -inkey "${RUNNER_TEMP}/public.pem" -in update.json -sigfile update.sig.bin
+          base64 -w0 update.sig.bin > update.json.sig
+          rm -f update.sig.bin
+          cat update.json
+
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          UPSTREAM: ${{ needs.plan.outputs.upstream }}
+          PREVIOUS: ${{ needs.plan.outputs.previous }}
+        run: |
+          set -euo pipefail
+          {
+            echo "qBitFusion ${VERSION}, based on qBittorrent ${UPSTREAM}."
+            echo
+            echo "Installed copies update themselves: they download this release in the background and install it the next time they start."
+            echo "For a new installation, download the zip below, extract the whole folder and run \`qbitfusion.exe\`. The program is not code-signed, so Windows may warn about an unknown publisher."
+            echo
+            echo "Known limitations are listed in the [README](https://github.com/${GITHUB_REPOSITORY}#limitations)."
+            if [ -n "${PREVIOUS}" ]; then
+              echo
+              echo "Changes since ${PREVIOUS}: https://github.com/${GITHUB_REPOSITORY}/compare/${PREVIOUS}...v${VERSION}"
+            fi
+          } > notes.md
+          cd release-out
+          gh release create "v${VERSION}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "qBitFusion ${VERSION}" \
+            --notes-file ../notes.md \
+            --latest \
+            "qBitFusion-${VERSION}-windows-x64.zip" \
+            "qBitFusion-${VERSION}-windows-x64.zip.sha256" \
+            update.json \
+            update.json.sig

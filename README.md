@@ -15,8 +15,8 @@
 for one of them is staged, because the demo files were not on a debrid account.</sub>
 
 **Status: experimental.** It is built and tested on Windows only, supports one debrid provider
-(Real-Debrid), and has been run against a real account by one person. Windows preview builds, when
-published, are on the Releases page and are not code-signed; otherwise you build it from source. The
+(Real-Debrid), and has been run against a real account by one person. Windows builds are on the
+[Releases](https://github.com/CoderNoel/qBitFusion/releases) page and are not code-signed. The
 [limitations](#limitations) are listed in full below, and most of them are open work that a pull request
 could take on.
 
@@ -64,6 +64,18 @@ layout and resume data, so the two kinds of source can be combined in one downlo
 - A monochrome icon set, a reworked add-torrent dialog, and restyled Options pages.
 - Options > Behavior can switch back to the classic qBittorrent look.
 
+### Updates
+
+- The program updates itself. Once a day it checks for a new release, downloads it in the background,
+  verifies its signature and checksum, and installs it the next time it starts. Running downloads are
+  never interrupted, and the settings folder is kept.
+- New qBittorrent releases flow in on their own: a daily workflow merges each one, and when it merges
+  cleanly and every test passes, a qBitFusion release follows without anyone stepping in. Conflicts, and
+  new release series, wait as pull requests for review.
+
+How both work: [qbitfusion/docs/RELEASING.md](qbitfusion/docs/RELEASING.md) and
+[qbitfusion/docs/UPSTREAM.md](qbitfusion/docs/UPSTREAM.md).
+
 ![Options dialog](qbitfusion/docs/screenshots/options.png)
 
 ## Limitations
@@ -91,7 +103,8 @@ What is missing or unverified:
 | Web UI / Web API | No way to see or set the download source. |
 | Interface | Reviewed at 150% scaling in the dark scheme. The light scheme and a few dialogs were changed but not re-checked. Labels inherited from qBittorrent still use Title Case, and some Options rows are unevenly aligned. |
 | Translations | New text is English only. |
-| Distribution | A portable zip for Windows, built by `qbitfusion/scripts/package-windows.ps1`. No installer, no code signing, no update check. |
+| Distribution | A portable zip for Windows that updates itself. No installer and no code signing, so Windows SmartScreen warns on first start. |
+| Updates | The updater replaces files but cannot roll back a version that installs fine and then fails to start. An upstream release that merges cleanly and passes the tests ships without anyone looking; the tests do not download from a real provider. |
 
 [qbitfusion/docs/STATUS.md](qbitfusion/docs/STATUS.md) is the detailed version of this list,
 [qbitfusion/docs/DECISIONS.md](qbitfusion/docs/DECISIONS.md) records the design decisions and the live observations,
@@ -116,8 +129,10 @@ These are self-contained enough for a pull request. Roughly in order of size:
 - **Web API and Web UI** — expose the source and its status.
 - **Packet-level privacy check** — a harness that adds a "Debrid only" torrent and proves that nothing
   leaves for trackers, DHT or peers.
-- **Releases** — a signed installer and a release workflow. A script for a portable zip exists
-  (`qbitfusion/scripts/package-windows.ps1`).
+- **Installer and code signing** — an installer, and an Authenticode certificate so that Windows trusts
+  the program. The release workflow is in `.github/workflows/release.yaml`.
+- **Update safety net** — start the new version once after installing an update, and go back to
+  `update/previous` if it fails to start.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the build steps and the rules a change has to follow.
 
@@ -134,10 +149,10 @@ pwsh qbitfusion/scripts/build-windows.ps1
 
 # build the optimized app and install it for the current user
 pwsh qbitfusion/scripts/install-windows.ps1
-
-# or build a portable zip into build-package
-pwsh qbitfusion/scripts/package-windows.ps1 -Version 0.1.0-preview
 ```
+
+A build made this way is a development build: it does not update itself. Releases are built on GitHub; see
+[qbitfusion/docs/RELEASING.md](qbitfusion/docs/RELEASING.md).
 
 The installed copy keeps its settings in a `profile` folder beside the program. It does not read or change
 an existing qBittorrent profile and can run next to stock qBittorrent. To connect a provider, open
@@ -159,7 +174,8 @@ sits in a few places:
 | `src/base/hybrid/`, `src/gui/hybrid/` | The hybrid transport and its interface. |
 | `src/gui/modern/` | The modern look: palettes, stylesheet, icons, shell widgets. |
 | `test/testhybrid*.cpp` | Tests for the hybrid code. |
-| `qbitfusion/docs/` | This project's documentation: status, decisions, specification, upstream guide. |
+| `src/base/selfupdate/` | The updater: signed update description, download, install. |
+| `qbitfusion/docs/` | This project's documentation: status, decisions, specification, releases, upstream guide. |
 | `qbitfusion/scripts/` | Windows scripts: toolchain, build, install, package, test instance. |
 | `qbitfusion/website/` | The [project website](https://codernoel.github.io/qBitFusion/), published to GitHub Pages. |
 | `qbitfusion/spike/`, `qbitfusion/tests/`, `qbitfusion/design/` | The libtorrent feasibility spike, the branding check, the logo source. |

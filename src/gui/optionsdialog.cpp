@@ -63,6 +63,7 @@
 #include "base/profile.h"
 #include "base/rss/rss_autodownloader.h"
 #include "base/rss/rss_session.h"
+#include "base/selfupdate/selfupdater.h"
 #include "base/torrentfileguard.h"
 #include "base/torrentfileswatcher.h"
 #include "base/utils/apikey.h"
@@ -416,7 +417,9 @@ void OptionsDialog::loadBehaviorTabOptions()
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     m_ui->checkProgramUpdates->setChecked(pref->isUpdateCheckEnabled());
-    m_ui->checkProgramUpdates->setVisible(!ProgramUpdater::isDisabledForThisBuild());
+    // qBitFusion: this setting drives its own updater, which downloads and installs updates itself.
+    m_ui->checkProgramUpdates->setText(tr("Keep qBitFusion up to date (downloads in the background, installs on the next start)"));
+    m_ui->checkProgramUpdates->setVisible(SelfUpdate::SelfUpdater::isSupported());
 #else
     m_ui->checkProgramUpdates->setVisible(false);
 #endif

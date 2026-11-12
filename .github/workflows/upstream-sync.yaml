@@ -1,0 +1,152 @@
+name: Upstream sync
+
+# Brings qBittorrent's releases into qBitFusion and ships them. Once a day:
+#
+# 1. If a newer qBittorrent release exists in the series this fork is on (for example 5.3.1 while on
+#    5.3.0), it is merged on a branch and a pull request is opened.
+#    - Clean merge: the Windows build and all tests run on it, and the pull request merges itself when
+#      they pass. Nobody has to look at it.
+#    - Conflicts: the pull request is left open for a person (or an agent) to resolve.
+# 2. If the newest merged qBittorrent release has no qBitFusion release yet, the Release workflow is
+#    started, and installed copies then update themselves.
+#
+# A new series (5.4, 6.0) can change the required Qt, libtorrent and compiler versions, so it is always
+# a pull request for review, never merged automatically.
+#
+# How to resolve a conflicting pull request: qbitfusion/docs/UPSTREAM.md
+
+on:
+  schedule:
+    - cron: '17 5 * * *'  # daily
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync with qBittorrent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push the merge branch
+      pull-requests: write  # open the pull request and turn on auto-merge
+      actions: write  # start the Windows build on the branch, and the Release workflow
+      issues: write  # create the "upstream" label if it is missing
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: main
+          persist-credentials: false
+
+      - name: Sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/qbittorrent/qBittorrent.git
+          git fetch --quiet --tags upstream
+
+          stable() { grep -Ev 'alpha|beta|rc'; }
+          base="$(git describe --tags --abbrev=0 --match 'release-[0-9]*' HEAD)"
+          series="${base%.*}"
+          next_same="$(git tag --list "${series}.*" --sort=-v:refname | stable | head -n 1)"
+          newest="$(git tag --list 'release-[0-9]*' --sort=-v:refname | stable | head -n 1)"
+          echo "Merged: ${base}. Newest in ${series}: ${next_same}. Newest overall: ${newest}."
+
+          gh label create upstream --repo "${GITHUB_REPOSITORY}" --color 0E8A16 \
+            --description "Merging or tracking qBittorrent releases" 2>/dev/null || true
+
+          # ---- 2. ship a merged upstream release that has no qBitFusion release yet
+          version="${base#release-}"
+          if [ -z "$(git tag --list "v${version}.*")" ] && [ -n "$(git tag --list 'v*')" ]; then
+            if gh run list --repo "${GITHUB_REPOSITORY}" --workflow release.yaml --status in_progress --json databaseId --jq '.[0].databaseId' | grep -q .; then
+              echo "A release is already being built."
+            else
+              echo "qBittorrent ${version} is merged but not released: starting the Release workflow."
+              gh workflow run release.yaml --repo "${GITHUB_REPOSITORY}" --ref main
+            fi
+          fi
+
+          # ---- 1. merge the next upstream release
+          if [ "${next_same}" != "${base}" ]; then
+            target="${next_same}"
+            automatic=true
+          elif [ "${newest}" != "${base}" ]; then
+            target="${newest}"
+            automatic=false
+          else
+            echo "Up to date with qBittorrent."
+            exit 0
+          fi
+
+          branch="upstream/${target}"
+          if gh pr list --repo "${GITHUB_REPOSITORY}" --head "${branch}" --state open --json number --jq '.[0].number' | grep -q .; then
+            echo "A pull request for ${target} is already open."
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "${branch}" > /dev/null; then
+            echo "Branch ${branch} exists without an open pull request (closed by a person?). Leaving it alone."
+            exit 0
+          fi
+
+          name="${target#release-}"
+          git switch --quiet -c "${branch}" origin/main
+          if git merge --no-ff --no-edit -m "Merge qBittorrent ${name}" "${target}"; then
+            clean=true
+          else
+            clean=false
+            git merge --abort
+            # The branch is the upstream release itself; the pull request shows what conflicts.
+            git switch --quiet --detach "${target}"
+            git branch --quiet -f "${branch}" "${target}"
+            git switch --quiet "${branch}"
+          fi
+          git push --quiet origin "${branch}"
+
+          compare="https://github.com/qbittorrent/qBittorrent/compare/${base}...${target}"
+          if [ "${clean}" = true ] && [ "${automatic}" = true ]; then
+            body="qBittorrent ${name} merged without conflicts.
+
+          This pull request merges itself once the Windows build and all tests pass. The next daily sync then publishes a qBitFusion release, and installed copies update themselves.
+
+          Upstream changes: ${compare}"
+          elif [ "${clean}" = true ]; then
+            body="qBittorrent ${name} starts a new release series. It merged without conflicts, but a new series can change the required Qt, libtorrent and compiler versions, so it is not merged automatically.
+
+          Check the toolchain versions in .github/workflows (and qbitfusion/scripts/bootstrap-windows.ps1) against upstream's, then merge with a merge commit (not squash).
+
+          Upstream changes: ${compare}"
+          else
+            body="qBittorrent ${name} does not merge cleanly into qBitFusion. This branch is the upstream release itself.
+
+          To resolve, locally:
+
+              git fetch origin
+              git switch -c resolve-${name} origin/main
+              git merge origin/${branch}
+              # fix the conflicts, build, run the tests
+              git push origin resolve-${name}
+
+          and open a pull request from resolve-${name}. Merge it with a merge commit (not squash), so that later upstream releases still merge. Where conflicts usually are, and how to resolve them: qbitfusion/docs/UPSTREAM.md
+
+          Upstream changes: ${compare}"
+          fi
+          gh pr create --repo "${GITHUB_REPOSITORY}" --base main --head "${branch}" --label upstream \
+            --title "Merge qBittorrent ${name}" --body "${body}"
+
+          if [ "${clean}" = true ]; then
+            # A pull request opened by this workflow does not start other workflows on its own.
+            gh workflow run ci_windows.yaml --repo "${GITHUB_REPOSITORY}" --ref "${branch}"
+          fi
+          if [ "${clean}" = true ] && [ "${automatic}" = true ]; then
+            gh pr merge "${branch}" --repo "${GITHUB_REPOSITORY}" --auto --merge
+          fi

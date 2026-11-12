@@ -130,7 +130,12 @@ Interface:
 
 Distribution:
 
-15. No installer, no code signing, no update check.
+15. No installer and no code signing.
+16. **Self-update** (2026-11-13): unit tests cover the version order, the Ed25519 signature check, the
+    rejection of unsigned, altered or foreign-hosted update descriptions, and the file swap that keeps the
+    profile. The whole path (download, unpack, install at start-up, restart) was tried once on this
+    machine against a local test server. The Release and upstream-sync workflows had not run on GitHub yet
+    when this was written. A version that installs but then fails to start is not rolled back.
 
 ## Next
 

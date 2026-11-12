@@ -1,6 +1,7 @@
 name: CI - Windows
 
-on: [pull_request, push]
+# workflow_dispatch: upstream-sync starts this on its merge branches (qBitFusion).
+on: [pull_request, push, workflow_dispatch]
 
 # Reading the repository is all a job may do unless it asks for more below.
 permissions:

@@ -32,6 +32,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <memory>
+#include <optional>
 
 #ifdef Q_OS_UNIX
 #include <sys/resource.h>
@@ -69,6 +70,8 @@ Q_IMPORT_PLUGIN(QICOPlugin)
 
 #include "base/preferences.h"
 #include "base/profile.h"
+#include "base/selfupdate/applyupdate.h"
+#include "base/selfupdate/selfupdater.h"
 #include "base/settingvalue.h"
 #include "base/version.h"
 #include "application.h"
@@ -178,6 +181,10 @@ namespace
 // Main
 int main(int argc, char *argv[])
 {
+    // qBitFusion: started from a staged update to install it (see base/selfupdate).
+    if (const std::optional<int> exitCode = SelfUpdate::runApplyModeIfRequested())
+        return *exitCode;
+
 #ifdef DISABLE_GUI
     setvbuf(stdout, nullptr, _IONBF, 0);
 #endif
@@ -251,6 +258,12 @@ int main(int argc, char *argv[])
 
             return EXIT_SUCCESS;
         }
+
+#if defined(Q_OS_WIN) && !defined(DISABLE_GUI)
+        // qBitFusion: a verified update downloaded earlier is installed now, before anything is loaded.
+        if (SelfUpdate::SelfUpdater::launchStagedUpdate(QCoreApplication::arguments().mid(1)))
+            return EXIT_SUCCESS;
+#endif
 
         CachedSettingValue<bool> legalNoticeShown {u"LegalNotice/Accepted"_s, false};
         if (params.confirmLegalNotice)

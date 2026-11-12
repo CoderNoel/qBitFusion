@@ -54,6 +54,11 @@ class LineEdit;
 class OptionsDialog;
 class PowerManagement;
 class ProgramUpdater;
+
+namespace SelfUpdate
+{
+    class SelfUpdater;
+}
 class PropertiesWidget;
 class RSSWidget;
 class SearchWidget;
@@ -285,8 +290,13 @@ private:
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     void checkProgramUpdate(bool invokedByUser);
     void handleUpdateCheckFinished(ProgramUpdater *updater, bool invokedByUser);
+    void checkSelfUpdate(bool invokedByUser);
+    void reportAppliedUpdate();
 
     QTimer *m_programUpdateTimer = nullptr;
+    SelfUpdate::SelfUpdater *m_selfUpdater = nullptr;
+    bool m_selfUpdateRequestedByUser = false;
+    QString m_announcedUpdateVersion;
 #endif
 #ifdef Q_OS_MACOS
     std::unique_ptr<MacUtils::Badger> m_badger;
