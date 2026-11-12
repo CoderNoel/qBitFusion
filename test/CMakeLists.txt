@@ -46,7 +46,13 @@ foreach(testFile ${testFiles})
 
     add_executable("${testFilename}" "${testFile}")
     target_link_libraries("${testFilename}" PRIVATE Qt::Test qbt_base)
-    add_test(NAME "${testFilename}" COMMAND "${testFilename}")
+    if (testFilename STREQUAL "testhybridcoordinator")
+        # qBitFusion: this test prints nothing on stdout under CTest; write its results to a file and show them.
+        add_test(NAME "${testFilename}" COMMAND "${CMAKE_COMMAND}" "-DTEST_EXE=$<TARGET_FILE:${testFilename}>"
+            "-DLOG_FILE=${CMAKE_CURRENT_BINARY_DIR}/${testFilename}.log" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/runwithlog.cmake")
+    else()
+        add_test(NAME "${testFilename}" COMMAND "${testFilename}")
+    endif()
 
     add_dependencies(check "${testFilename}")
 endforeach()
