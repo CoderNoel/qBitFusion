@@ -121,7 +121,8 @@ $zip = Join-Path $out "$name.zip"
 Remove-Item $zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-Set-Content "$zip.sha256" "$hash  $name.zip" -Encoding ascii
+# One line with a Unix line ending, so that `sha256sum -c` reads it on any system.
+[IO.File]::WriteAllText("$zip.sha256", "$hash  $name.zip`n", [Text.Encoding]::ASCII)
 Remove-Item $stage -Recurse -Force
 
 "{0}  ({1:N1} MiB)" -f $zip, ((Get-Item $zip).Length / 1MB)
