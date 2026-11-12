@@ -1,0 +1,60 @@
+name: Website
+
+# Publishes qbitfusion/website/ to GitHub Pages. Downloads are not involved: the site links to the
+# assets of GitHub Releases, which the Release workflow publishes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "qbitfusion/website/**"
+      - "qbitfusion/docs/screenshots/**"
+      - "qbitfusion/scripts/build-website.py"
+      - ".github/workflows/website.yaml"
+  workflow_dispatch:
+
+permissions: {}
+
+# One deployment at a time, and never cancel one that has started.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read  # check out the repository
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Assemble the site
+        run: python qbitfusion/scripts/build-website.py --out _site
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-slim
+    permissions:
+      pages: write  # publish to GitHub Pages
+      id-token: write  # prove the deployment comes from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

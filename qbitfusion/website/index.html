@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>qBitFusion: debrid and BitTorrent in one verified download</title>
+    <meta name="description" content="A fork of qBittorrent 5.3 that downloads a torrent from a debrid account over HTTPS and from BitTorrent peers, and checks every piece against the torrent's hashes.">
+    <meta name="theme-color" content="#000000">
+    <meta name="color-scheme" content="dark light">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="qBitFusion">
+    <meta property="og:description" content="Debrid over HTTPS and BitTorrent peers. One hash-verified download.">
+    <meta property="og:url" content="https://codernoel.github.io/qBitFusion/">
+    <meta property="og:image" content="https://codernoel.github.io/qBitFusion/assets/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <link rel="stylesheet" href="styles.css">
+    <script>document.documentElement.classList.add("js");</script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" data-nav>
+        <nav class="nav-inner" aria-label="Main">
+            <a class="brand" href="#top" aria-label="qBitFusion, back to top">
+                <img src="assets/logo.png" width="22" height="22" alt="">
+                <span>qBitFusion</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#how">How it works</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#interface">Interface</a></li>
+                <li><a href="#status">Status</a></li>
+                <li><a href="#contribute">Contribute</a></li>
+            </ul>
+            <div class="nav-end">
+                <a class="nav-icon" href="https://github.com/CoderNoel/qBitFusion" aria-label="qBitFusion on GitHub">
+                    <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
+                </a>
+                <a class="btn btn-small" href="#download">Download</a>
+            </div>
+        </nav>
+    </header>
+
+    <main id="main">
+        <!-- Hero -->
+        <section class="hero theme-dark" id="top">
+            <div class="wrap hero-copy">
+                <p class="eyebrow reveal">Experimental preview for Windows</p>
+                <h1 class="display reveal">One torrent.<br><span class="ember-text">Two ways in.</span></h1>
+                <p class="lede reveal">
+                    qBitFusion is a fork of qBittorrent 5.3 that downloads a torrent from your debrid account over
+                    HTTPS and from BitTorrent peers, and checks every piece against the torrent's own hashes.
+                </p>
+                <div class="ctas reveal">
+                    <a class="btn" href="#download">Download</a>
+                    <a class="link-chevron" href="https://github.com/CoderNoel/qBitFusion">View the source on GitHub</a>
+                </div>
+            </div>
+
+            <figure class="hero-shot" data-tilt>
+                <div class="hero-glow" aria-hidden="true"></div>
+                <img class="shot" src="assets/screenshots/main-window.png" width="1800" height="1140"
+                     alt="The qBitFusion main window with three torrents: one seeding, two downloading. The Source column shows BitTorrent for two and HTTPS · Real-Debrid for one.">
+                <figcaption class="wrap">
+                    Real downloads of Creative Commons films. The "HTTPS · Real-Debrid" source shown for one of them
+                    is staged, because the demo files were not on a debrid account.
+                </figcaption>
+            </figure>
+        </section>
+
+        <!-- The idea -->
+        <section class="statement theme-light" id="idea">
+            <div class="wrap-narrow">
+                <p class="eyebrow">The idea</p>
+                <p class="statement-text" data-statement>
+                    <span>A debrid service already holds a copy of the files.</span>
+                    <span>The usual way to use one is a separate downloader, and the files you get are cut off from the torrent.</span>
+                    <strong>qBitFusion makes the provider one more source for the torrent itself.</strong>
+                    <span>It requests byte ranges, builds them into pieces, and hands each piece to libtorrent,</span>
+                    <strong>which checks it the same way it checks a piece from a peer.</strong>
+                </p>
+            </div>
+        </section>
+
+        <!-- How it works: interactive piece map -->
+        <section class="how theme-dark" id="how">
+            <div class="wrap">
+                <header class="section-head reveal">
+                    <p class="eyebrow">How it works</p>
+                    <h2 class="headline">Choose a source per torrent.<br><span class="muted">Change it whenever you like.</span></h2>
+                </header>
+
+                <div class="segmented reveal" role="tablist" aria-label="Download source" data-segmented>
+                    <span class="segmented-thumb" aria-hidden="true"></span>
+                    <button role="tab" type="button" aria-selected="false" data-mode="debrid">Debrid only</button>
+                    <button role="tab" type="button" aria-selected="true" data-mode="preferred">Debrid preferred</button>
+                    <button role="tab" type="button" aria-selected="false" data-mode="bittorrent">BitTorrent</button>
+                </div>
+
+                <div class="sim reveal" data-sim>
+                    <div class="sim-sources">
+                        <div class="source" data-source="https">
+                            <span class="source-dot" aria-hidden="true"></span>
+                            <span class="source-name">HTTPS · Real-Debrid</span>
+                            <span class="source-state" data-state-https></span>
+                        </div>
+                        <div class="source" data-source="peers">
+                            <span class="source-dot" aria-hidden="true"></span>
+                            <span class="source-name">BitTorrent peers</span>
+                            <span class="source-state" data-state-peers></span>
+                        </div>
+                    </div>
+
+                    <div class="piece-map" data-pieces aria-hidden="true"></div>
+
+                    <div class="sim-foot">
+                        <div class="sim-progress">
+                            <div class="bar"><span data-bar></span></div>
+                            <span class="sim-count" data-count>0 of 240 pieces verified</span>
+                        </div>
+                        <ul class="legend">
+                            <li><i class="sw sw-https"></i>From HTTPS</li>
+                            <li><i class="sw sw-peers"></i>From peers</li>
+                            <li><i class="sw sw-flight"></i>Downloading</li>
+                            <li><i class="sw sw-bad"></i>Failed hash check</li>
+                        </ul>
+                    </div>
+                    <p class="sim-note">An illustration, not a recording. Piece counts and timings are made up.</p>
+                </div>
+
+                <div class="mode-copy" aria-live="polite">
+                    <article data-mode-copy="debrid" hidden>
+                        <h3>Debrid only</h3>
+                        <p>HTTPS from the provider and nothing else. No tracker, DHT, PEX or peer connections for this
+                            torrent, not even to fetch a magnet link's metadata. It does not seed.</p>
+                    </article>
+                    <article data-mode-copy="preferred">
+                        <h3>Debrid preferred, BitTorrent fallback</h3>
+                        <p>HTTPS for what the provider has, peers for the rest. Here the provider is missing one file,
+                            so those pieces come from the swarm. Falling back asks you first, because peers see your
+                            IP address.</p>
+                    </article>
+                    <article data-mode-copy="bittorrent" hidden>
+                        <h3>BitTorrent</h3>
+                        <p>Standard qBittorrent behavior, unchanged: peers only, and the torrent seeds as
+                            usual.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="features theme-light" id="features">
+            <div class="wrap">
+                <header class="section-head reveal">
+                    <p class="eyebrow">Features</p>
+                    <h2 class="headline">The provider is a source.<br><span class="muted">libtorrent stays in charge.</span></h2>
+                </header>
+
+                <div class="bento">
+                    <article class="tile tile-wide reveal">
+                        <div class="tile-art hash-row" aria-hidden="true">
+                            <span class="ok"></span><span class="ok"></span><span class="ok"></span><span class="bad"></span><span class="ok"></span><span class="ok"></span><span class="ok"></span><span class="ok"></span>
+                        </div>
+                        <h3>Verified, piece by piece.</h3>
+                        <p>Provider data is checked against the torrent's hashes before it counts. Data that doesn't
+                            match is thrown away and fetched again.</p>
+                    </article>
+
+                    <article class="tile reveal">
+                        <div class="tile-figure">0<span>verified pieces lost</span></div>
+                        <h3>Progress survives a switch.</h3>
+                        <p>Verified pieces are kept when the source changes. A provider outage doesn't restart the
+                            download.</p>
+                    </article>
+
+                    <article class="tile reveal">
+                        <div class="tile-art files" aria-hidden="true">
+                            <div><span>Film</span><i class="fh"></i><em>HTTPS</em></div>
+                            <div><span>Extras</span><i class="fh short"></i><em>HTTPS</em></div>
+                            <div><span>Subtitles</span><i class="fp shorter"></i><em>Peers</em></div>
+                        </div>
+                        <h3>Coverage, decided per piece.</h3>
+                        <p>If the provider has only some of a torrent's files, it supplies the pieces it fully covers.
+                            Peers can do the rest.</p>
+                    </article>
+
+                    <article class="tile reveal">
+                        <div class="tile-art source-sample" aria-hidden="true">
+                            <span>Source</span>
+                            <span><svg viewBox="0 0 16 16"><path d="M5 13V3M2 6l3-3 3 3M11 3v10m-3-3 3 3 3-3"/></svg>HTTPS · Real-Debrid</span>
+                            <span><svg viewBox="0 0 16 16"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 14c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5M11 2.6a2.5 2.5 0 0 1 0 4.8M12.5 9.8c1.3.6 2 2 2 4.2"/></svg>BitTorrent · not cached on Real-Debrid</span>
+                        </div>
+                        <h3>It says where data comes from.</h3>
+                        <p>A Source column shows each torrent's source and, when it isn't the provider, why.</p>
+                    </article>
+
+                    <article class="tile reveal">
+                        <div class="tile-art glyph" aria-hidden="true">
+                            <svg viewBox="0 0 48 48" width="48" height="48"><rect x="9" y="21" width="30" height="21" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M16 21v-6a8 8 0 0 1 16 0v6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="31" r="2.6" fill="currentColor"/></svg>
+                        </div>
+                        <h3>Tokens stay in Windows.</h3>
+                        <p>Provider credentials live in the Windows Credential Manager. Tokens and signed links are
+                            kept out of settings files and logs.</p>
+                    </article>
+
+                    <article class="tile tile-full tile-dark reveal">
+                        <div>
+                            <h3>Switched off, it's qBittorrent.</h3>
+                            <p>With the hybrid feature off, behavior matches qBittorrent's. It keeps its own profile
+                                and runs alongside a stock install without touching it.</p>
+                        </div>
+                        <div class="switch-demo" aria-hidden="true">
+                            <span>Hybrid sources</span>
+                            <i class="switch"></i>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interface -->
+        <section class="interface theme-dark" id="interface">
+            <div class="wrap">
+                <header class="section-head reveal">
+                    <p class="eyebrow">Interface</p>
+                    <h2 class="headline">qBittorrent, <span class="ember-text" data-accent-text>quieter.</span></h2>
+                    <p class="section-lede">A single header replaces the menu bar and toolbar, and every function is
+                        still there. Light and dark schemes follow the system, and the classic look is one switch
+                        away.</p>
+                </header>
+
+                <div class="accent-picker reveal" data-accent-picker>
+                    <span class="accent-label">Pick an accent, like you can in the app:</span>
+                    <div class="swatches" role="radiogroup" aria-label="Accent color">
+                        <button type="button" role="radio" aria-checked="true" aria-label="Ember" style="--c:#ff5b2e"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Blue" style="--c:#3b82f6"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Sky" style="--c:#0ea5e9"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Teal" style="--c:#14b8a6"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Green" style="--c:#22a559"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Amber" style="--c:#e8a317"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Rose" style="--c:#f43f5e"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Violet" style="--c:#8b5cf6"></button>
+                        <button type="button" role="radio" aria-checked="false" aria-label="Graphite" style="--c:#8a8a8a"></button>
+                    </div>
+                </div>
+
+                <div class="gallery">
+                    <figure class="reveal">
+                        <img class="shot" src="assets/screenshots/add-torrent.png" width="1702" height="1226" loading="lazy"
+                             alt="The add-torrent dialog, with a choice of download source.">
+                        <figcaption><strong>Add a torrent.</strong> Pick its source as you add it.</figcaption>
+                    </figure>
+                    <figure class="reveal">
+                        <img class="shot" src="assets/screenshots/options.png" width="1600" height="1060" loading="lazy"
+                             alt="The Options dialog, restyled.">
+                        <figcaption><strong>Options, restyled.</strong> Connect a provider under Hybrid sources.</figcaption>
+                    </figure>
+                </div>
+            </div>
+        </section>
+
+        <!-- Status / limitations -->
+        <section class="status theme-light" id="status">
+            <div class="wrap">
+                <header class="section-head reveal">
+                    <p class="eyebrow">Status</p>
+                    <h2 class="headline">What's been tested.<br><span class="muted">And what hasn't yet.</span></h2>
+                </header>
+
+                <dl class="stats reveal">
+                    <div><dt>Test suites passing on Windows</dt><dd>32</dd></div>
+                    <div><dt>Of them on the hybrid code, end to end</dt><dd>10</dd></div>
+                    <div><dt>Real debrid accounts it has run against</dt><dd>1</dd></div>
+                    <div><dt>Over HTTPS in that one live run</dt><dd>~10<small> MiB/s</small></dd></div>
+                </dl>
+
+                <div class="specs reveal">
+                    <div class="spec"><h3>Platforms</h3><p>Built and tested on Windows 11 only (MSVC, Qt 6.10.3, libtorrent 2.1.2). Linux and macOS have never been compiled.</p></div>
+                    <div class="spec"><h3>Providers</h3><p>Real-Debrid only. Torrents that are v2-only can't use it.</p></div>
+                    <div class="spec"><h3>Not yet seen live</h3><p>Several selected files in one torrent, a link expiring mid-transfer, OAuth token refresh, and adding a torrent to the account from the app.</p></div>
+                    <div class="spec"><h3>Privacy</h3><p>"Debrid only makes no swarm connections" is enforced in code and tested at the API level, but not yet confirmed with a packet capture. Your provider still knows what you download.</p></div>
+                    <div class="spec"><h3>Debrid only</h3><p>If the provider lacks part of a torrent, the download stops near the end and says so. It doesn't warn you at the start.</p></div>
+                    <div class="spec"><h3>Speed</h3><p>Four parallel HTTPS requests per torrent by default. Whether that holds back fast connections hasn't been measured.</p></div>
+                    <div class="spec"><h3>Statistics</h3><p>"Downloaded" and session totals count only bytes from peers. Progress, speed and ETA are correct.</p></div>
+                    <div class="spec"><h3>Web UI and Web API</h3><p>No way to see or set the download source.</p></div>
+                    <div class="spec"><h3>Translations</h3><p>New text is in English only.</p></div>
+                    <div class="spec"><h3>Distribution</h3><p>A portable zip. No installer, no code signing and no update check yet.</p></div>
+                </div>
+
+                <p class="more reveal"><a class="link-chevron" href="https://github.com/CoderNoel/qBitFusion/blob/main/qbitfusion/docs/STATUS.md">Read the detailed status</a></p>
+            </div>
+        </section>
+
+        <!-- Contribute -->
+        <section class="contribute theme-dark" id="contribute">
+            <div class="wrap">
+                <header class="section-head reveal">
+                    <p class="eyebrow">Contribute</p>
+                    <h2 class="headline">Built in the open.<br><span class="muted">Help wanted.</span></h2>
+                    <p class="section-lede">Most of the limitations above are open work. These are self-contained
+                        enough for a pull request, roughly smallest first.</p>
+                </header>
+
+                <ol class="work reveal">
+                    <li><span>Count HTTPS bytes in the download totals</span><code>src/base/bittorrent/torrentimpl.cpp</code></li>
+                    <li><span>Warn at the start when "Debrid only" can't finish</span><code>src/base/hybrid/hybridcoordinator.cpp</code></li>
+                    <li><span>Interface clean-up and a pass over the light scheme</span><code>src/gui/modern/</code></li>
+                    <li><span>Measure and tune parallel HTTPS requests</span><code>Hybrid/MaxHttpPiecesPerTorrent</code></li>
+                    <li><span>Another debrid provider, with contract tests</span><code>src/base/hybrid/provider.h</code></li>
+                    <li><span>Linux and macOS builds, with their credential stores</span><code>src/base/hybrid/securestore.cpp</code></li>
+                    <li><span>Show and set the source in the Web UI and Web API</span><code>src/webui/</code></li>
+                    <li><span>A packet-level check that "Debrid only" stays off the swarm</span><code>test/</code></li>
+                    <li><span>A release workflow, a signed installer and an update check</span><code>.github/workflows/</code></li>
+                </ol>
+
+                <div class="ctas reveal">
+                    <a class="btn btn-secondary" href="https://github.com/CoderNoel/qBitFusion/blob/main/CONTRIBUTING.md">Read the contributing guide</a>
+                    <a class="link-chevron" href="https://github.com/CoderNoel/qBitFusion/issues">Browse issues</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Download -->
+        <section class="download theme-light" id="download">
+            <div class="wrap-narrow center">
+                <img class="download-logo reveal" src="assets/logo.png" width="96" height="96" alt="">
+                <h2 class="headline reveal">Try qBitFusion.</h2>
+                <p class="section-lede reveal">For Windows 10 and 11, 64-bit. It's portable: settings stay in a folder
+                    beside the program, and an existing qBittorrent profile is never read or changed.</p>
+
+                <div class="release reveal" data-release>
+                    <div class="release-ready" data-release-ready hidden>
+                        <a class="btn btn-large" data-release-link href="https://github.com/CoderNoel/qBitFusion/releases">Download</a>
+                        <p class="release-meta" data-release-meta></p>
+                        <p class="fine">Preview builds aren't code-signed yet, so Windows SmartScreen may warn you
+                            before the first run.</p>
+                    </div>
+
+                    <div class="release-none" data-release-none>
+                        <p class="release-meta">No preview build has been published yet. Until then, build it from
+                            source with Visual Studio 2022, Git, Python 3 and PowerShell 7:</p>
+                        <div class="code">
+                            <button class="copy" type="button" data-copy aria-label="Copy the commands">Copy</button>
+<pre><code>git clone https://github.com/CoderNoel/qBitFusion.git
+cd qBitFusion
+pwsh qbitfusion/scripts/bootstrap-windows.ps1
+pwsh qbitfusion/scripts/install-windows.ps1</code></pre>
+                        </div>
+                        <a class="link-chevron" href="https://github.com/CoderNoel/qBitFusion#building-on-windows">Full build instructions</a>
+                    </div>
+                </div>
+
+                <p class="fine use-note reveal">qBitFusion is a download client. Use it for content you have the right
+                    to download and within your provider's terms. It doesn't work around provider limits, blocks or
+                    takedowns.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="wrap footer-inner">
+            <p>qBitFusion is created and maintained by <a href="https://github.com/CoderNoel">Noel (CoderNoel)</a>.
+                It stands on <a href="https://github.com/qbittorrent/qBittorrent">qBittorrent</a>, the work of its
+                authors and many contributors, and on <a href="https://libtorrent.org/">libtorrent</a> by Arvid
+                Norberg.</p>
+            <p>qBitFusion is a separate project and is not affiliated with or endorsed by the qBittorrent project.
+                Please report problems with qBitFusion on its own
+                <a href="https://github.com/CoderNoel/qBitFusion/issues">issue tracker</a>.</p>
+            <p>Licensed under the <a href="https://github.com/CoderNoel/qBitFusion/blob/main/COPYING">GNU GPL, version 2
+                or later</a>, with the OpenSSL linking exception. The films in the screenshots, Sintel, Big Buck Bunny
+                and Tears of Steel, are © Blender Foundation, licensed under Creative Commons Attribution.</p>
+            <p>This site uses no cookies, analytics or third-party fonts. It asks the GitHub API for the latest
+                release, and nothing else.</p>
+        </div>
+    </footer>
+</body>
+</html>
