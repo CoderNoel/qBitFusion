@@ -109,6 +109,8 @@ jobs:
   deploy:
     name: Deploy
     needs: build
+    # The skipped check job above would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-slim
     permissions:
       pages: write  # publish to GitHub Pages
