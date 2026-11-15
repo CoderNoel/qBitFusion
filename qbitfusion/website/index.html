@@ -69,7 +69,7 @@
 
             <figure class="hero-shot" data-tilt>
                 <div class="hero-glow" aria-hidden="true"></div>
-                <img class="shot" src="assets/screenshots/main-window.png" width="1800" height="1140"
+                <img class="shot" src="assets/screenshots/main-window.png" width="1800" height="1140" data-accent-shot data-accent-keep="10 0 44 40, 26 58 48 48, 26 1034 48 44"
                      alt="The qBitFusion main window with three torrents: one seeding, two downloading. The Source column shows BitTorrent for two and HTTPS · Real-Debrid for one.">
                 <figcaption class="wrap">
                     Real downloads of Creative Commons films. The "HTTPS · Real-Debrid" source shown for one of them
@@ -315,13 +315,17 @@
 
                 <div class="gallery">
                     <figure class="reveal">
-                        <img class="shot" src="assets/screenshots/add-torrent.png" width="1702" height="1226" loading="lazy"
-                             alt="The add-torrent dialog, with a choice of download source.">
+                        <a class="shot-link" href="assets/screenshots/add-torrent.png">
+                            <img class="shot" src="assets/screenshots/add-torrent.png" width="1702" height="1226" loading="lazy" data-accent-shot data-accent-keep="10 0 44 40"
+                                 alt="The add-torrent dialog, with a choice of download source. Opens the full-size image.">
+                        </a>
                         <figcaption><strong>Add a torrent.</strong> Pick its source as you add it.</figcaption>
                     </figure>
                     <figure class="reveal">
-                        <img class="shot" src="assets/screenshots/options.png" width="1600" height="1060" loading="lazy"
-                             alt="The Options dialog, restyled.">
+                        <a class="shot-link" href="assets/screenshots/options.png">
+                            <img class="shot" src="assets/screenshots/options.png" width="1600" height="1060" loading="lazy" data-accent-shot data-accent-keep="10 0 44 40, 418 370 62 60"
+                                 alt="The Options dialog, restyled. Opens the full-size image.">
+                        </a>
                         <figcaption><strong>Options, restyled.</strong> Connect a provider under Hybrid sources.</figcaption>
                     </figure>
                 </div>
@@ -404,8 +408,17 @@
                     <div class="release-ready" data-release-ready hidden>
                         <a class="btn btn-large" data-release-link href="https://github.com/CoderNoel/qBitFusion/releases">Download</a>
                         <p class="release-meta" data-release-meta></p>
-                        <p class="fine">Preview builds aren't code-signed yet, so Windows SmartScreen may warn you
-                            before the first run.</p>
+                        <div class="started" data-release-started role="status" hidden>
+                            <p><strong>Your download has started.</strong> When it finishes:</p>
+                            <ol>
+                                <li>Right-click the zip and choose <b>Extract All</b>.</li>
+                                <li>Open the extracted folder and run <b>qbitfusion.exe</b>.</li>
+                                <li>If Windows SmartScreen appears, choose <b>More info</b>, then <b>Run anyway</b>.
+                                    The preview isn't code-signed yet.</li>
+                            </ol>
+                        </div>
+                        <p class="fine" data-release-fine>Preview builds aren't code-signed yet, so Windows
+                            SmartScreen may warn you before the first run.</p>
                     </div>
 
                     <div class="release-none" data-release-none>
@@ -441,8 +454,8 @@ pwsh qbitfusion/scripts/install-windows.ps1</code></pre>
             <p>Licensed under the <a href="https://github.com/CoderNoel/qBitFusion/blob/main/COPYING">GNU GPL, version 2
                 or later</a>, with the OpenSSL linking exception. The films in the screenshots, Sintel, Big Buck Bunny
                 and Tears of Steel, are © Blender Foundation, licensed under Creative Commons Attribution.</p>
-            <p>This site uses no cookies, analytics or third-party fonts. It asks the GitHub API for the latest
-                release, and nothing else.</p>
+            <p>This site uses no cookies, analytics or third-party fonts, and loads nothing from other sites. The
+                download is served from this site and is the same file as the latest GitHub release.</p>
         </div>
     </footer>
 </body>

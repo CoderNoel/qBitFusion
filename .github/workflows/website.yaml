@@ -1,7 +1,13 @@
 name: Website
 
-# Publishes qbitfusion/website/ to GitHub Pages. Downloads are not involved: the site links to the
-# assets of GitHub Releases, which the Release workflow publishes.
+# Publishes qbitfusion/website/ to GitHub Pages, with the latest release's zip in download/ so visitors
+# download it from the site itself. The zip is checked against the size and SHA-256 in that release's
+# update.json. Installed copies don't use the site: they update from GitHub Releases.
+#
+# The download is kept in step with the latest release in three ways:
+#   - the Release workflow starts this workflow on main after publishing;
+#   - a release published, edited or deleted by hand starts it too (see "Follow a release" below);
+#   - every six hours it compares the zip on the site with the latest release, and rebuilds if they differ.
 on:
   push:
     branches: [main]
@@ -10,6 +16,10 @@ on:
       - "qbitfusion/docs/screenshots/**"
       - "qbitfusion/scripts/build-website.py"
       - ".github/workflows/website.yaml"
+  release:
+    types: [published, unpublished, edited, deleted]
+  schedule:
+    - cron: "23 */6 * * *"
   workflow_dispatch:
 
 permissions: {}
@@ -19,9 +29,59 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  SITE_URL: https://qbitfusion.org
+
 jobs:
+  # A release event runs on the release's tag, which may not deploy to Pages. Start this workflow on main
+  # instead. Releases made by the Release workflow don't raise this event; that workflow starts this one itself.
+  follow-release:
+    name: Follow a release
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # start this workflow on main
+    steps:
+      - name: Rebuild the site from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run website.yaml --repo "${GITHUB_REPOSITORY}" --ref main
+
+  # On the schedule, rebuild only if the site's zip isn't the latest release's.
+  check:
+    name: Check the download
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # read the latest release
+    outputs:
+      stale: ${{ steps.compare.outputs.stale }}
+    steps:
+      - name: Compare the site with the latest release
+        id: compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # no release, or one without update.json, reads as empty; the build then decides what the site shows
+          latest=$({ gh release download --repo "${GITHUB_REPOSITORY}" --pattern update.json --output - || true; } | jq -r '."windows-x64".sha256 // empty' || true)
+          # a site without a download yet counts as out of date
+          served=$({ curl -fsSL "${SITE_URL}/download/latest.json" || true; } | jq -r '.sha256 // empty' || true)
+          echo "Latest release: ${latest}"
+          echo "On the site:    ${served:-nothing}"
+          if [ "${latest,,}" = "${served,,}" ]; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build
+    needs: check
+    # Runs for pushes and manual runs (when check is skipped), and on the schedule when the site is out of date.
+    if: >-
+      !cancelled() && github.event_name != 'release'
+      && (needs.check.result == 'skipped' || needs.check.outputs.stale == 'true')
     runs-on: ubuntu-slim
     permissions:
       contents: read  # check out the repository
@@ -37,7 +97,9 @@ jobs:
           python-version: "3.x"
 
       - name: Assemble the site
-        run: python qbitfusion/scripts/build-website.py --out _site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}  # read the latest release without the anonymous rate limit
+        run: python qbitfusion/scripts/build-website.py --with-release --out _site
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@v5

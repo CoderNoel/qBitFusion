@@ -56,6 +56,11 @@ body {
     display: none !important;
 }
 
+a,
+button {
+    -webkit-tap-highlight-color: transparent;
+}
+
 img {
     display: block;
     max-width: 100%;
@@ -129,7 +134,7 @@ p {
 }
 
 section {
-    padding-block: clamp(96px, 14vw, 168px);
+    padding-block: clamp(80px, 14vw, 168px);
     position: relative;
 }
 
@@ -154,6 +159,22 @@ section {
 .headline {
     font: 700 clamp(2.5rem, 6vw, 4.5rem)/1.05 var(--font-display);
     letter-spacing: -0.03em;
+}
+
+/* On a phone the forced line breaks leave ragged lines; let the two halves run on instead. */
+@media (max-width: 640px) {
+    .headline {
+        font-size: 2.25rem;
+        line-height: 1.08;
+    }
+
+    .headline br {
+        display: none;
+    }
+
+    .headline br + span::before {
+        content: " ";
+    }
 }
 
 .muted {
@@ -204,8 +225,10 @@ section {
     transition: background-color 0.2s, transform 0.1s ease-out, filter 0.2s;
 }
 
-.btn:hover {
-    filter: brightness(1.08);
+@media (hover: hover) {
+    .btn:hover {
+        filter: brightness(1.08);
+    }
 }
 
 .btn:active {
@@ -568,6 +591,10 @@ section {
     margin-top: 22px;
 }
 
+.skip-ahead .link-chevron {
+    white-space: normal;
+}
+
 .compare {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -837,8 +864,10 @@ section {
     transition: background-color 0.2s, transform 0.1s ease-out;
 }
 
-.flow-play:hover {
-    background: #2c2c2e;
+@media (hover: hover) {
+    .flow-play:hover {
+        background: #2c2c2e;
+    }
 }
 
 .flow-play:active {
@@ -906,30 +935,41 @@ section {
 }
 
 .flow-art.tall .svg-small {
-    font-size: 15px;
-}
-
-.flow-art.tall .svg-label {
     font-size: 17px;
 }
 
+.flow-art.tall .svg-label {
+    font-size: 19px;
+}
+
+/* On a phone the four steps become a short list beside the play button, one line each. */
 @media (max-width: 640px) {
+    .flow-stage {
+        padding: 18px 16px 20px;
+    }
+
     .flow-controls {
         align-items: flex-start;
+        gap: 12px;
+        margin-top: 22px;
     }
 
     .flow-steps {
         display: grid;
-        grid-template-columns: 1fr 1fr;
         flex: 1;
+        gap: 6px;
     }
 
     .flow-steps button {
         width: 100%;
-        padding-right: 10px;
-        font-size: 0.75rem;
-        line-height: 1.2;
-        text-align: left;
+        min-height: 40px;
+        white-space: nowrap;
+    }
+
+    .flow-caption {
+        min-height: 4.4em;
+        margin-top: 18px;
+        font-size: 1.0625rem;
     }
 
     .compare-art .svg-small,
@@ -1219,10 +1259,20 @@ section {
     font-size: 0.75rem;
 }
 
+/* All three texts share one cell, so the box is as tall as the longest and nothing below jumps. */
 .mode-copy {
+    display: grid;
     margin: 0 0 32px;
     max-width: 680px;
-    min-height: 8.5em;
+}
+
+.mode-copy article {
+    grid-area: 1 / 1;
+}
+
+.mode-copy article[hidden] {
+    display: block !important;
+    visibility: hidden;
 }
 
 /* The modes follow the flow on the same black, so start closer and mark the seam. */
@@ -1247,8 +1297,32 @@ section {
     line-height: 1.5;
 }
 
-.mode-copy article {
+.mode-copy article:not([hidden]) {
     animation: fade-up 0.5s var(--ease-out);
+}
+
+@media (max-width: 640px) {
+    .mode-copy h3 {
+        font-size: 1.3125rem;
+    }
+
+    .mode-copy p {
+        font-size: 1.0625rem;
+    }
+
+    .sim-progress {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .bar {
+        flex: 1 1 100%;
+        order: 2;
+    }
+
+    .legend {
+        gap: 8px 16px;
+    }
 }
 
 @keyframes fade-up {
@@ -1582,9 +1656,36 @@ section {
     font-weight: 600;
 }
 
+.shot-link {
+    display: block;
+    border-radius: 12px;
+    cursor: zoom-in;
+}
+
 @media (max-width: 760px) {
     .gallery {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .accent-picker {
+        margin-bottom: 36px;
+    }
+
+    .swatches {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 360px) {
+    .swatches {
+        gap: 6px;
+    }
+
+    .swatches button {
+        width: 24px;
+        height: 24px;
     }
 }
 
@@ -1710,6 +1811,24 @@ section {
     .work code {
         grid-column: 2;
         text-align: left;
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (max-width: 640px) {
+    .work li {
+        grid-template-columns: 1.9em 1fr;
+        gap: 4px 12px;
+        padding: 18px 0;
+        font-size: 1.0625rem;
+    }
+
+    .work li::before {
+        font-size: 0.8125rem;
+    }
+
+    .work code {
+        font-size: 0.75rem;
     }
 }
 
@@ -1752,6 +1871,53 @@ section {
     gap: 24px;
 }
 
+/* On a phone, the file name gets its own line instead of breaking mid-way. */
+@media (max-width: 640px) {
+    .release-meta span {
+        display: block;
+    }
+
+    .release-meta .sep {
+        display: none;
+    }
+}
+
+.started {
+    width: 100%;
+    max-width: 460px;
+    margin-top: 8px;
+    padding: 20px 24px;
+    border-radius: 18px;
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--hair-light);
+    color: var(--ink-2);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    text-align: left;
+    animation: fade-up 0.5s var(--ease-out);
+}
+
+.started strong,
+.started b {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.started ol {
+    margin: 10px 0 0;
+    padding-left: 1.3em;
+}
+
+.started li + li {
+    margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .started {
+        animation: none;
+    }
+}
+
 .release-none {
     display: flex;
     flex-direction: column;
@@ -1791,8 +1957,10 @@ section {
     transition: background-color 0.2s;
 }
 
-.copy:hover {
-    background: rgba(255, 255, 255, 0.2);
+@media (hover: hover) {
+    .copy:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
 }
 
 .fine {
@@ -1865,7 +2033,7 @@ section {
         animation: none;
     }
 
-    .mode-copy article {
+    .mode-copy article:not([hidden]) {
         animation: none;
     }
 }

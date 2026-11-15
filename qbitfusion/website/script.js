@@ -449,14 +449,21 @@ function runWhenVisible(target, frame) {
                     card: { x: 520, y: 122, w: 440, h: 214 },
                     pService: "M240 118 C 390 118, 380 196, 520 196",
                     pSwarm: "M240 332 C 390 332, 380 262, 520 262",
+                    cols: 20, gap: 3, sourceDx: 76,
                 }
                 : {
-                    vb: "0 20 400 600",
+                    // A phone: fewer, larger pieces, and a card that fits them.
+                    vb: "0 24 400 600",
                     service: [100, 92], swarm: [300, 92],
-                    card: { x: 30, y: 360, w: 340, h: 204 },
-                    pService: "M100 176 C 100 270, 160 270, 160 360",
-                    pSwarm: "M300 176 C 300 270, 240 270, 240 360",
+                    card: { x: 22, y: 352, w: 356, h: 0 },
+                    pService: "M100 176 C 100 266, 160 266, 160 352",
+                    pSwarm: "M300 176 C 300 266, 240 266, 240 352",
+                    cols: 10, gap: 6, sourceDx: 88,
                 };
+            const cw = (L.card.w - 44 - L.gap * (L.cols - 1)) / L.cols;
+            const rows = Math.ceil(N / L.cols);
+            const gridBottom = 92 + rows * (cw + L.gap) - L.gap;
+            if (!L.card.h) L.card.h = gridBottom + 54;
             art.setAttribute("viewBox", L.vb);
             art.classList.toggle("tall", !wide);
 
@@ -497,19 +504,17 @@ function runWhenVisible(target, frame) {
             svg("text", { x: c.x + 58, y: c.y + 39, class: "svg-label strong" }, P.card, "qBitFusion");
             P.pct = svg("text", { x: c.x + c.w - 22, y: c.y + 39, class: "svg-label strong", "text-anchor": "end" }, P.card);
             svg("text", { x: c.x + 22, y: c.y + 70, class: "svg-small" }, P.card, "Source");
-            P.source = svg("text", { x: c.x + 76, y: c.y + 70, class: "svg-small bright" }, P.card);
+            P.source = svg("text", { x: c.x + L.sourceDx, y: c.y + 70, class: "svg-small bright" }, P.card);
 
-            const cols = 20;
-            const gap = 3;
-            const cw = (c.w - 44 - gap * (cols - 1)) / cols;
+            const { cols, gap } = L;
             P.cells = [];
             for (let i = 0; i < N; i++) {
                 const r = Math.floor(i / cols);
                 const x = c.x + 22 + (i % cols) * (cw + gap);
-                const y = c.y + 88 + r * (cw + gap);
-                P.cells.push(svg("rect", { x: x.toFixed(1), y: y.toFixed(1), width: cw.toFixed(1), height: cw.toFixed(1), rx: 3, class: "fl-cell" }, P.card));
+                const y = c.y + 92 + r * (cw + gap);
+                P.cells.push(svg("rect", { x: x.toFixed(1), y: y.toFixed(1), width: cw.toFixed(1), height: cw.toFixed(1), rx: wide ? 3 : 5, class: "fl-cell" }, P.card));
             }
-            const below = c.y + 88 + 2 * (cw + gap) + 26;
+            const below = c.y + gridBottom + 30;
             P.note = svg("text", { x: c.x + 22, y: below, class: "svg-small" }, P.card);
             P.check = svg("text", { x: c.x + c.w - 22, y: below, class: "svg-small ok", "text-anchor": "end" }, P.card);
             parts = P;
@@ -608,17 +613,144 @@ function runWhenVisible(target, frame) {
     }
 }
 
+/* ---------- Screenshots that follow the accent ---------- */
+
+// The screenshots were taken with the Ember accent. For another accent, the pixels close to Ember's hue are
+// recolored in a canvas, keeping their lightness and relative saturation, so the window looks as it would with
+// that accent. Areas listed in data-accent-keep ("x y w h, ...", in image pixels) are left alone, such as the logo.
+
+const EMBER = "#ff5b2e";
+
+function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const d = max - min;
+    if (!d) return [0, 0, l];
+    const s = d / (1 - Math.abs(2 * l - 1));
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [(h * 60 + 360) % 360, s, l];
+}
+
+function hslToRgb(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+
+const hexToHsl = (hex) => rgbToHsl(...[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
+
+function accentShot(img) {
+    const original = img.getAttribute("src");
+    const keep = (img.dataset.accentKeep || "").split(",").filter(Boolean).map((r) => r.trim().split(/\s+/).map(Number));
+    const [eh, es, el] = hexToHsl(EMBER);
+    let canvas, ctx, out, base, idx, weight, hsl;
+    let gen = 0;
+    let url = null;
+
+    // Find the accent-colored pixels once, with how strongly each one is accent.
+    function analyse() {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        canvas = Object.assign(document.createElement("canvas"), { width: w, height: h });
+        ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        out = ctx.getImageData(0, 0, w, h);
+        base = out.data.slice();
+        const found = [];
+        for (let p = 0; p < base.length; p += 4) {
+            const r = base[p], g = base[p + 1], b = base[p + 2];
+            const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+            if (chroma < 12 || r < g || r < b) continue;
+            const [ph, ps, pl] = rgbToHsl(r, g, b);
+            const dist = Math.min(Math.abs(ph - eh), 360 - Math.abs(ph - eh));
+            const k = clamp((20 - dist) / 10, 0, 1) * clamp((chroma - 12) / 20, 0, 1);
+            if (k < 0.02) continue;
+            const x = (p / 4) % w;
+            const y = Math.floor(p / 4 / w);
+            if (keep.some(([kx, ky, kw, kh]) => x >= kx && x < kx + kw && y >= ky && y < ky + kh)) continue;
+            found.push(p, k, ps, pl);
+        }
+        const n = found.length / 4;
+        idx = new Uint32Array(n);
+        weight = new Float32Array(n);
+        hsl = new Float32Array(n * 2);
+        for (let i = 0; i < n; i++) {
+            idx[i] = found[i * 4];
+            weight[i] = found[i * 4 + 1];
+            hsl[i * 2] = found[i * 4 + 2];
+            hsl[i * 2 + 1] = found[i * 4 + 3];
+        }
+    }
+
+    return async (accent) => {
+        const mine = ++gen;
+        if (accent.toLowerCase() === EMBER) {
+            if (url) {
+                img.src = original;
+                URL.revokeObjectURL(url);
+                url = null;
+            }
+            return;
+        }
+        if (!canvas) {
+            if (!img.complete || !img.naturalWidth) {
+                await new Promise((resolve) => img.addEventListener("load", resolve, { once: true }));
+                if (mine !== gen) return;
+            }
+            analyse();
+        }
+
+        // Map Ember's lightness onto the new accent's, keeping black black and white white.
+        const [th, ts, tl] = hexToHsl(accent);
+        const light = (l) => (l <= el ? (l * tl) / el : tl + ((l - el) * (1 - tl)) / (1 - el));
+        const d = out.data;
+        for (let i = 0; i < idx.length; i++) {
+            const p = idx[i];
+            const k = weight[i];
+            const [r, g, b] = hslToRgb(th, clamp((hsl[i * 2] * ts) / es, 0, 1), clamp(light(hsl[i * 2 + 1]), 0, 1));
+            d[p] = base[p] + (r - base[p]) * k;
+            d[p + 1] = base[p + 1] + (g - base[p + 1]) * k;
+            d[p + 2] = base[p + 2] + (b - base[p + 2]) * k;
+        }
+        ctx.putImageData(out, 0, 0);
+
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+        if (mine !== gen || !blob) return;
+        const next = URL.createObjectURL(blob);
+        // Load it off-screen first, so the swap doesn't flash.
+        await new Promise((resolve) => {
+            const ready = new Image();
+            ready.onload = ready.onerror = resolve;
+            ready.src = next;
+        });
+        if (mine !== gen) {
+            URL.revokeObjectURL(next);
+            return;
+        }
+        img.src = next;
+        if (url) URL.revokeObjectURL(url);
+        url = next;
+    };
+}
+
 /* ---------- Accent picker ---------- */
 
 {
     const swatches = $$("[data-accent-picker] button");
+    const shots = $$("img[data-accent-shot]").map(accentShot);
     const pick = (b, focus) => {
         swatches.forEach((s) => {
             const on = s === b;
             s.setAttribute("aria-checked", String(on));
             s.tabIndex = on ? 0 : -1;
         });
-        document.documentElement.style.setProperty("--accent", b.style.getPropertyValue("--c"));
+        const accent = b.style.getPropertyValue("--c").trim();
+        document.documentElement.style.setProperty("--accent", accent);
+        shots.forEach((recolor) => recolor(accent));
         if (focus) b.focus();
     };
     swatches.forEach((b, i) => {
@@ -662,39 +794,39 @@ function runWhenVisible(target, frame) {
     const mib = (bytes) => `${(bytes / 1048576).toFixed(bytes > 104857600 ? 0 : 1)} MB`;
     const date = (iso) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
-    fetch("https://api.github.com/repos/CoderNoel/qBitFusion/releases?per_page=10", {
-        headers: { Accept: "application/vnd.github+json" },
-    })
-        .then((r) => (r.ok ? r.json() : []))
-        .then((releases) => {
-            for (const rel of releases) {
-                if (rel.draft) continue;
-                // The release workflow publishes qBitFusion-<version>-windows-x64.zip and a .sha256 beside it.
-                const zip = rel.assets.find((a) => /-windows-x64\.zip$/i.test(a.name))
-                    ?? rel.assets.find((a) => /\.zip$/i.test(a.name));
-                if (!zip) continue;
-                const sum = rel.assets.find((a) => a.name === `${zip.name}.sha256`);
+    const started = $("[data-release-started]");
 
-                link.href = zip.browser_download_url;
-                link.textContent = `Download ${rel.tag_name}`;
-                meta.textContent = `${zip.name} · ${mib(zip.size)} · ${date(rel.published_at)}`;
-                const links = document.createElement("span");
-                links.className = "release-links";
-                const add = (href, text) => {
-                    const a = document.createElement("a");
-                    a.href = href;
-                    a.className = "link-chevron";
-                    a.textContent = text;
-                    links.append(a);
-                };
-                add(rel.html_url, "Release notes");
-                if (sum) add(sum.browser_download_url, "SHA-256");
-                meta.after(links);
+    // The site's build puts the latest release's zip in download/, beside latest.json, so the download comes
+    // from this site and the visitor stays on the page. Without it, the build-from-source steps stay.
+    fetch("download/latest.json", { cache: "no-cache" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((rel) => {
+            if (!rel || !/^qBitFusion-[\d.]+-windows-x64\.zip$/.test(rel.file)) return;
 
-                ready.hidden = false;
-                none.hidden = true;
-                return;
-            }
+            link.href = `download/${rel.file}`;
+            link.download = rel.file;
+            link.textContent = `Download v${rel.version}`;
+            const part = (text, cls) => Object.assign(document.createElement("span"), { textContent: text, className: cls ?? "" });
+            meta.replaceChildren(part(rel.file), part(" · ", "sep"), part(`${mib(rel.size)} · ${date(rel.published)}`));
+            const links = document.createElement("span");
+            links.className = "release-links";
+            const add = (href, text, file) => {
+                const a = Object.assign(document.createElement("a"), { href, className: "link-chevron", textContent: text });
+                if (file) a.download = file;
+                links.append(a);
+            };
+            add(rel.notes, "Release notes");
+            add(`download/${rel.file}.sha256`, "SHA-256", `${rel.file}.sha256`);
+            meta.after(links);
+
+            // What to do next, in place of the SmartScreen note it repeats.
+            link.addEventListener("click", () => {
+                started.hidden = false;
+                $("[data-release-fine]").hidden = true;
+            });
+
+            ready.hidden = false;
+            none.hidden = true;
         })
         .catch(() => { /* Keep the build-from-source instructions. */ });
 }

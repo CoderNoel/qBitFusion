@@ -92,7 +92,7 @@ jobs:
     runs-on: ${{ matrix.config.os }}
     permissions:
       contents: write  # create the release and its tag
-      actions: write  # store and clean up build caches
+      actions: write  # store and clean up build caches, and start the Website workflow
 
     strategy:
       matrix:
@@ -310,3 +310,10 @@ jobs:
             "qBitFusion-${VERSION}-windows-x64.zip.sha256" \
             update.json \
             update.json.sig
+
+      # The website serves the latest zip itself, so rebuild it to offer this release.
+      - name: Update the website
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run website.yaml --repo "${GITHUB_REPOSITORY}" --ref main
