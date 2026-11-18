@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include <QBitArray>
@@ -36,6 +37,8 @@
 #include "filebinding.h"
 #include "pieceassembler.h"
 #include "provider.h"
+
+class QObject;
 
 // The coordinator's only window into a torrent (spec 03 "ITorrentPieceSink", spec 06 "Narrow
 // wrapper around libtorrent"). Implemented by TorrentImpl in the app and by a direct
@@ -71,5 +74,21 @@ namespace Hybrid
 
         // Asynchronous, no overwrite_existing. Verdict arrives via the coordinator's notify* calls.
         virtual void addPiece(int piece, std::vector<char> &&data) = 0;
+
+        // ---- Combined mode (ADR-011): provider and peers on different pieces at the same time.
+
+        // Keeps peers off pieces the provider is fetching (libtorrent piece priority 0), and lets
+        // them back on. In memory only: resume data and every later priority change keep the
+        // user's own piece priorities, and a re-added torrent starts without exclusions.
+        virtual void setPeerExclusion(const QList<int> &exclude, const QList<int> &include) = 0;
+        // Increments whenever the torrent had to re-apply its exclusions after something reset
+        // piece priorities (file priority change, first/last piece option, reload). A peer queue
+        // read before that is no proof that peers stayed off an excluded piece.
+        virtual quint64 peerExclusionGeneration() const = 0;
+        // Pieces in libtorrent's download queue: peer blocks requested or received. Asynchronous;
+        // the read is ordered after every exclusion already passed to setPeerExclusion().
+        virtual void requestPeerQueue(QObject *context, std::function<void (const QList<int> &pieces)> done) = 0;
+        // Payload rate from peers, bytes per second.
+        virtual qint64 peerDownloadRate() const = 0;
     };
 }

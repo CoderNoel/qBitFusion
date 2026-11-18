@@ -30,6 +30,8 @@
 
 #include <libtorrent/torrent_info.hpp>
 
+#include <QFuture>
+
 #include "base/hybrid/ltlayout.h"
 #include "infohash.h"
 #include "torrentimpl.h"
@@ -138,6 +140,37 @@ bool BitTorrent::HybridTorrentSink::isTransportHoldSettled() const
 void BitTorrent::HybridTorrentSink::addPiece(const int piece, std::vector<char> &&data)
 {
     m_torrent->addExternalPiece(piece, std::move(data));
+}
+
+void BitTorrent::HybridTorrentSink::setPeerExclusion(const QList<int> &exclude, const QList<int> &include)
+{
+    m_torrent->setHybridPeerExclusion(exclude, include);
+}
+
+quint64 BitTorrent::HybridTorrentSink::peerExclusionGeneration() const
+{
+    return m_torrent->hybridPeerExclusionGeneration();
+}
+
+void BitTorrent::HybridTorrentSink::requestPeerQueue(QObject *context, std::function<void (const QList<int> &)> done)
+{
+    // Runs on the session's worker thread; the libtorrent call queues behind every priority change
+    // already posted from this thread, so the answer reflects the exclusions made so far.
+    m_torrent->fetchDownloadingPieces().then(context, [done = std::move(done)](const QBitArray &pieces)
+    {
+        QList<int> result;
+        for (qsizetype i = 0; i < pieces.size(); ++i)
+        {
+            if (pieces.testBit(i))
+                result.append(static_cast<int>(i));
+        }
+        done(result);
+    });
+}
+
+qint64 BitTorrent::HybridTorrentSink::peerDownloadRate() const
+{
+    return m_torrent->hybridPeerDownloadRate();
 }
 
 void BitTorrent::HybridTorrentSink::setHttpRate(const qint64 bytesPerSecond)

@@ -48,6 +48,14 @@ layout and resume data, so the two kinds of source can be combined in one downlo
 - Verified pieces are kept when the source changes. A provider outage does not restart the download.
 - Coverage is decided per piece: if the provider has only some of the torrent's files, it supplies the
   pieces it fully covers and the rest can come from peers.
+- **Both at once (optional, off by default).** For "Debrid preferred" torrents where you allowed
+  BitTorrent, Options > Hybrid sources can download from the provider and from peers at the same time,
+  on different pieces, so a connection faster than the debrid server delivers is used in full. The
+  provider takes pieces in order a few at a time; only those are hidden from peers, so the two never
+  fetch the same piece, and your file priorities are left alone. The last few pieces go to whichever
+  source is faster. If one source fails or stalls, the other carries on. Peers are then contacted from
+  the start of the download, not only when the provider fails. On a line the provider already fills,
+  this adds little.
 - A **Source** column shows where a torrent's data is coming from and, when it is not the provider, why
   (for example "BitTorrent · not cached on Real-Debrid").
 - Provider credentials are stored in the Windows Credential Manager. Tokens and signed links are kept out
@@ -107,10 +115,11 @@ What has been checked, and how:
 
 - **Automated tests:** 34 suites pass on Windows. Ten of them cover the hybrid code, including end-to-end
   runs against a real libtorrent session and a local test server: HTTPS-only download of v1, v2 and hybrid
-  torrents, rejection of corrupt data, an outage in mid-download, the consent rule, and a provider that
-  has only part of a torrent. One covers direct downloads against a local test server: link and content
-  classification, file naming, redirect rules, redaction, resume (after a pause, a dropped connection and
-  a restart), changed files, expired links and the speed limit.
+  torrents, rejection of corrupt data, an outage in mid-download, the consent rule, a provider that
+  has only part of a torrent, and both sources at once (no piece fetched by both, output identical,
+  hand-over when either source fails or stalls). One covers direct downloads against a local test
+  server: link and content classification, file naming, redirect rules, redaction, resume (after a
+  pause, a dropped connection and a restart), changed files, expired links and the speed limit.
 - **Live use:** one Real-Debrid account and one large torrent, which completed over HTTPS at about
   10 MiB/s. That is the whole of the real-world evidence so far.
 
@@ -124,6 +133,7 @@ What is missing or unverified:
 | Privacy | "Debrid only makes no swarm connections" is enforced in code and tested at the API level. It has not been confirmed with a packet capture. Your provider still knows what you download. |
 | Debrid only | If the provider lacks part of a torrent, the download stops near the end and says so. It does not warn you at the start. |
 | Speed | HTTPS downloads use four parallel requests per torrent by default. Whether that holds back fast lines has not been measured. |
+| Both sources at once | Measured only on this machine with a local test server and one local seed, not with the real service or a real swarm. There, with each source limited to 768 KiB/s, both together were about 1.6 times as fast as either alone. Some of its parts (the piece priorities written to resume data, re-hiding pieces after you change file priorities, holding back "completed" while a hidden piece is missing) are not covered by an automated test. |
 | Statistics | "Downloaded" and session totals count only bytes from peers. Progress, speed and ETA are correct. |
 | Web UI / Web API | No way to see or set the download source. |
 | Direct downloads | Tested against a local test server and public file servers, not yet with a real Stremio add-on or debrid link. One connection per file: on one test, four connections to a distant server were about 1.5 times faster than one, so this may hold back fast lines. At most three run at once, which cannot be changed yet. There is no checksum, only size and ETag, so a power cut during a download can leave bad bytes at the end of the partial file. Not available from the Web UI, RSS or watched folders. If an add-on redirects to a "still caching" placeholder video, that video is what gets downloaded. Links longer than 2,560 characters do not fit in the Credential Manager and have to be pasted again after a restart. The add dialog always appears for file links, even when the add-torrent dialog is switched off. The status bar and the speed graph count torrent traffic only. |

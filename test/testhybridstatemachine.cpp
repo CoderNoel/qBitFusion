@@ -36,9 +36,9 @@ using E = MachineEvent;
 
 namespace
 {
-    MachineContext ctx(const TransportPolicy policy, const bool consent, const bool metadata = true)
+    MachineContext ctx(const TransportPolicy policy, const bool consent, const bool metadata = true, const bool combined = false)
     {
-        return {policy, consent, metadata};
+        return {policy, consent, metadata, combined};
     }
 }
 
@@ -203,9 +203,12 @@ private slots:
             ctx(TransportPolicy::DebridOnly, false, false),
             ctx(TransportPolicy::DebridOnly, true, true),
             ctx(TransportPolicy::DebridPreferred, false, true),
-            ctx(TransportPolicy::DebridPreferred, false, false)
+            ctx(TransportPolicy::DebridPreferred, false, false),
+            // Combined mode asked for where P2P is not permitted: still no swarm (ADR-011).
+            ctx(TransportPolicy::DebridOnly, true, true, true),
+            ctx(TransportPolicy::DebridPreferred, false, true, true)
         };
-        constexpr int eventCount = static_cast<int>(E::FatalError) + 1;
+        constexpr int eventCount = static_cast<int>(E::TailToPeers) + 1;
         quint32 seed = 4242;
         for (const MachineContext &c : contexts)
         {
@@ -221,8 +224,96 @@ private slots:
                 QVERIFY2(!swarmAllowed(m.state(), c), qPrintable(wireName(m.state())));
                 QVERIFY(m.state() != S::P2PActive);
                 QVERIFY(m.state() != S::RecoveryProbing);
+                QVERIFY(m.state() != S::CombinedActive);
             }
         }
+    }
+
+    void combinedModeRunsBothSources() const
+    {
+        // ADR-011: with combined mode in effect the provider no longer pauses peers.
+        TransportStateMachine m;
+        const auto c = ctx(TransportPolicy::DebridPreferred, true, true, true);
+        m.handle(E::Enable, c);
+        QCOMPARE(m.state(), S::ProbingProvider);
+        QCOMPARE(m.handle(E::ProviderReady, c).to, S::CombinedActive);
+        QVERIFY(swarmAllowed(m.state(), c));
+        QVERIFY(httpDispatchAllowed(m.state()));
+        QCOMPARE(activeTransport(m.state()), ActiveTransport::Combined);
+        QCOMPARE(wireName(m.state()), QStringLiteral("COMBINED_ACTIVE"));
+        QCOMPARE(wireName(ActiveTransport::Combined), QStringLiteral("combined"));
+
+        // Provider fails: peers are already running, so no drain step.
+        QCOMPARE(m.handle(E::HttpOutage, c, Reason::ProviderOutage).to, S::P2PActive);
+        // Recovery returns straight to both sources, without pausing peers.
+        m.handle(E::RecoveryDue, c);
+        QCOMPARE(m.handle(E::RecoveryProbeOk, c).to, S::CombinedActive);
+        // Provider has nothing more: peers finish.
+        QCOMPARE(m.handle(E::HttpExhausted, c, Reason::ProviderLacksPieces).to, S::P2PActive);
+    }
+
+    void combinedModeTailGoesToOneSource() const
+    {
+        const auto c = ctx(TransportPolicy::DebridPreferred, true, true, true);
+        const auto combined = [&c]
+        {
+            TransportStateMachine m;
+            m.handle(E::Enable, c);
+            m.handle(E::ProviderReady, c);
+            return m;
+        };
+
+        TransportStateMachine toProvider = combined();
+        QCOMPARE(toProvider.handle(E::TailToProvider, c, Reason::TailToProvider).to, S::HttpReady);
+        QVERIFY(!swarmAllowed(toProvider.state(), c));   // peers are held while they drain
+        QCOMPARE(toProvider.handle(E::PeersDrained, c).to, S::HttpActive);
+
+        TransportStateMachine toPeers = combined();
+        const Transition t = toPeers.handle(E::TailToPeers, c, Reason::TailToPeers);
+        QCOMPARE(t.to, S::P2PActive);
+        QCOMPARE(t.reason, Reason::TailToPeers);
+    }
+
+    void combinedModeCanBeSwitchedWhileRunning() const
+    {
+        const auto on = ctx(TransportPolicy::DebridPreferred, true, true, true);
+        const auto off = ctx(TransportPolicy::DebridPreferred, true, true, false);
+
+        TransportStateMachine m;
+        m.handle(E::Enable, off);
+        QCOMPARE(m.handle(E::ProviderReady, off).to, S::HttpActive);   // serialized as before
+        QCOMPARE(m.handle(E::CombinedChanged, on).to, S::CombinedActive);
+        QCOMPARE(m.handle(E::CombinedChanged, off).to, S::HttpReady);   // peers drain first
+        QCOMPARE(m.handle(E::PeersDrained, off).to, S::HttpActive);
+
+        // Without combined mode nothing reaches CombinedActive, and recovery pauses peers first.
+        TransportStateMachine serial;
+        serial.handle(E::Enable, off);
+        serial.handle(E::ProviderUnavailable, off);
+        QCOMPARE(serial.state(), S::P2PActive);
+        serial.handle(E::RecoveryDue, off);
+        QCOMPARE(serial.handle(E::RecoveryProbeOk, off).to, S::HttpReady);
+        QCOMPARE(serial.handle(E::TailToPeers, off).to, S::HttpReady);   // ignored outside combined mode
+    }
+
+    void combinedModeStopsWhenConsentIsWithdrawn() const
+    {
+        TransportStateMachine m;
+        const auto on = ctx(TransportPolicy::DebridPreferred, true, true, true);
+        m.handle(E::Enable, on);
+        m.handle(E::ProviderReady, on);
+        QCOMPARE(m.state(), S::CombinedActive);
+
+        const auto revoked = ctx(TransportPolicy::DebridPreferred, false, true, false);
+        QCOMPARE(m.handle(E::ConsentChanged, revoked).to, S::ProbingProvider);
+        QVERIFY(!swarmAllowed(m.state(), revoked));
+
+        TransportStateMachine strict;
+        strict.handle(E::Enable, on);
+        strict.handle(E::ProviderReady, on);
+        const auto debridOnly = ctx(TransportPolicy::DebridOnly, false, true, false);
+        QCOMPARE(strict.handle(E::PolicyChanged, debridOnly).to, S::ProbingProvider);
+        QVERIFY(!swarmAllowed(strict.state(), debridOnly));
     }
 
     void stateNames() const

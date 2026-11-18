@@ -160,6 +160,7 @@ Hybrid::HybridCoordinator::HybridCoordinator(TorrentPieceSink *sink, Provider *p
     , m_drainTimer {new QTimer(this)}
     , m_dispatchTimer {new QTimer(this)}
     , m_rateTimer {new QTimer(this)}
+    , m_queueTimer {new QTimer(this)}
 {
     m_eventTimer->setSingleShot(true);
     connect(m_eventTimer, &QTimer::timeout, this, [this] { fire(m_timerEvent); });
@@ -184,9 +185,15 @@ Hybrid::HybridCoordinator::HybridCoordinator(TorrentPieceSink *sink, Provider *p
         m_rateWindowBytes = 0;
         const qint64 previous = m_status.httpRateBps;
         m_status.httpRateBps = (previous == 0) ? sample : ((previous * 2) + sample) / 3;
-        if ((previous != m_status.httpRateBps) || (sample > 0))
+        const qint64 previousP2P = m_status.p2pRateBps;
+        m_status.p2pRateBps = isCombined() ? m_sink->peerDownloadRate() : 0;
+        watchPeerStall();
+        if ((previous != m_status.httpRateBps) || (sample > 0) || (previousP2P != m_status.p2pRateBps))
             emit statusChanged();
     });
+
+    m_queueTimer->setInterval(std::max(50, m_config.peerQueueIntervalMs));
+    connect(m_queueTimer, &QTimer::timeout, this, &HybridCoordinator::requestPeerQueue);
 
     if (m_provider)
         m_status.providerName = m_provider->displayName();
@@ -195,11 +202,32 @@ Hybrid::HybridCoordinator::HybridCoordinator(TorrentPieceSink *sink, Provider *p
 Hybrid::HybridCoordinator::~HybridCoordinator()
 {
     abortHttp();
+    // Give the user's piece priorities back (ADR-011); the torrent outlives its coordinator.
+    if (!m_excluded.isEmpty())
+        m_sink->setPeerExclusion({}, m_excluded.values());
 }
 
 Hybrid::MachineContext Hybrid::HybridCoordinator::context() const
 {
-    return {m_policy, m_consent, m_sink->hasMetadata()};
+    return {m_policy, m_consent, m_sink->hasMetadata(), isCombined()};
+}
+
+bool Hybrid::HybridCoordinator::isCombined() const
+{
+    // Never without P2P permission: "Debrid only" and "no consent" make no swarm contact (ADR-011).
+    return m_config.combinedSources && (m_policy == TransportPolicy::DebridPreferred) && m_consent;
+}
+
+void Hybrid::HybridCoordinator::setCombinedSources(const bool enabled)
+{
+    if (m_config.combinedSources == enabled)
+        return;
+    m_config.combinedSources = enabled;
+    if (m_policy == TransportPolicy::TorrentOnly)
+        return;
+    fire(MachineEvent::CombinedChanged, Reason::UserRequest);
+    syncPeerExclusion();
+    emit statusChanged();
 }
 
 Hybrid::HybridStatus Hybrid::HybridCoordinator::status() const
@@ -320,7 +348,14 @@ void Hybrid::HybridCoordinator::abortHttp()
             m_budget->release(m_assemblyBytes.value(it.key()));
     }
     m_assemblies.clear();
+    for (auto it = m_awaitingQueue.cbegin(); it != m_awaitingQueue.cend(); ++it)
+    {
+        if (m_budget)
+            m_budget->release(m_assemblyBytes.value(it.key()));
+    }
+    m_awaitingQueue.clear();
     m_assemblyBytes.clear();
+    m_claimSeq.clear();
     m_ownership.releaseAllFetching();
     m_dispatchTimer->stop();
 }
@@ -347,6 +382,8 @@ void Hybrid::HybridCoordinator::enterState(const Transition &transition)
 
     m_eventTimer->stop();
     m_drainTimer->stop();
+    if (transition.to != TransportState::CombinedActive)
+        m_queueTimer->stop();
 
     const ActiveTransport before = activeTransport(transition.from);
     const ActiveTransport after = activeTransport(transition.to);
@@ -387,6 +424,7 @@ void Hybrid::HybridCoordinator::enterState(const Transition &transition)
     case S::ProbingProvider:
         bumpEpoch();
         abortHttp();
+        m_tailDecided = false;
         if (m_sink->hasMetadata() && (m_ownership.pieceCount() != m_sink->pieceCount()))
         {
             m_ownership.reset(m_sink->pieceCount());
@@ -398,7 +436,24 @@ void Hybrid::HybridCoordinator::enterState(const Transition &transition)
         break;
 
     case S::HttpActive:
+        m_tailDecided = false;
         applyHold();
+        syncPeerExclusion();   // held: no peer can take a piece, so nothing stays hidden
+        // Peers are held: pieces they owned in combined mode are free for HTTP again (partial
+        // ones are completed by add_piece, which keeps blocks peers already delivered).
+        m_ownership.reconcileP2PQueue({});
+        schedule();
+        break;
+
+    case S::CombinedActive:
+        // Peers and provider at once (ADR-011). HTTP waits for the first read of the peer queue,
+        // so it never starts on a piece peers are already working on.
+        m_tailDecided = false;
+        m_peerStallSinceMs = 0;
+        applyHold();
+        m_combinedStartSeq = m_queueRequested + 1;
+        m_queueTimer->start();
+        requestPeerQueue();
         schedule();
         break;
 
@@ -410,8 +465,14 @@ void Hybrid::HybridCoordinator::enterState(const Transition &transition)
         break;
 
     case S::P2PActive:
+        if (transition.from == S::CombinedActive)
+            bumpEpoch();   // no drain step in between: late HTTP callbacks must be dropped here
         abortHttp();
-        armRecoveryProbe();
+        m_peerStallSinceMs = 0;
+        // Peers were picked to finish the last pieces: no probing back to the provider unless
+        // they stall (watchPeerStall).
+        if (!m_tailDecided)
+            armRecoveryProbe();
         break;
 
     case S::RecoveryProbing:
@@ -419,6 +480,13 @@ void Hybrid::HybridCoordinator::enterState(const Transition &transition)
         break;
 
     case S::HttpReady:
+        if (transition.from == S::CombinedActive)
+        {
+            // Combined mode ends with the provider alone: cancel HTTP work in flight, so that no
+            // piece stays hidden from peers while they drain (ADR-011).
+            bumpEpoch();
+            abortHttp();
+        }
         // Provider confirmed: drain peers with a graceful pause before HTTP takes over (spike E6).
         applyHold();
         if (m_sink->isTransportHoldSettled())
@@ -446,7 +514,10 @@ void Hybrid::HybridCoordinator::enterState(const Transition &transition)
         break;
     }
 
+    // Hold first, then priorities: a graceful pause stops new peer requests before a hidden
+    // piece is shown to peers again.
     applyHold();
+    syncPeerExclusion();
     emit transitioned(transition.from, transition.to, transition.reason);
     emit policyPersistRequested(m_policy, m_consent, m_status.lastReason, m_status.switchCount);
     emit statusChanged();
@@ -739,6 +810,10 @@ void Hybrid::HybridCoordinator::schedule()
     if (!httpDispatchAllowed(m_machine.state()) || m_sink->isChecking() || !m_provider)
         return;
 
+    const bool combined = (m_machine.state() == TransportState::CombinedActive);
+    if (combined && ((m_queueDone < m_combinedStartSeq) || m_tailDecided))
+        return; // first read of the peer queue pending, or the last pieces are being handed over
+
     const qint64 now = m_clock();
     if (now < m_dispatchNotBeforeMs)
     {
@@ -749,6 +824,23 @@ void Hybrid::HybridCoordinator::schedule()
     const QList<int> wanted = m_sink->wantedMissingPieces();
     if (wanted.isEmpty() && m_assemblies.isEmpty() && (m_ownership.counts().httpSubmitted == 0))
         return; // completion arrives through notifyFinished()
+
+    if (combined)
+    {
+        // End of the download: the last pieces go to one source, the faster one, instead of
+        // both racing for them (ADR-011).
+        const auto notHttp = std::count_if(wanted.cbegin(), wanted.cend(), [this](const int piece)
+        {
+            const PieceOwner owner = m_ownership.owner(piece);
+            return (owner != PieceOwner::HttpFetching) && (owner != PieceOwner::HttpSubmitted);
+        });
+        if (notHttp <= tailThreshold())
+        {
+            m_tailDecided = true;
+            QMetaObject::invokeMethod(this, &HybridCoordinator::decideTail, Qt::QueuedConnection);
+            return;
+        }
+    }
 
     // Only pieces the provider can supply in full are candidates. Filtering before picking matters:
     // an unbound piece must not occupy a slot that a later, bound piece could use.
@@ -772,6 +864,7 @@ void Hybrid::HybridCoordinator::schedule()
     if (freeSlots <= 0)
         return;
 
+    bool claimed = false;
     for (const int piece : m_ownership.pickForHttp(candidates, freeSlots))
     {
         const qint64 length = m_sink->pieceLength(piece);
@@ -788,9 +881,20 @@ void Hybrid::HybridCoordinator::schedule()
             continue;
         }
         m_assemblyBytes.insert(piece, length);
+        if (combined)
+            m_claimSeq.insert(piece, m_queueRequested + 1);
+        claimed = true;
         dispatch(piece);
     }
     m_status.httpInFlight = static_cast<int>(m_assemblies.size());
+
+    if (combined && claimed)
+    {
+        // Hide the new pieces from peers before any HTTP byte is requested, then read the peer
+        // queue so the fetch can be submitted as soon as it completes.
+        syncPeerExclusion();
+        requestPeerQueue();
+    }
 }
 
 void Hybrid::HybridCoordinator::checkHttpExhausted()
@@ -861,15 +965,41 @@ void Hybrid::HybridCoordinator::onAssemblyCompleted(const int piece, const quint
     const QPointer<PieceAssembly> assembly = m_assemblies.take(piece);
     if (assembly)
         assembly->deleteLater();
-    if (m_budget)
-        m_budget->release(m_assemblyBytes.take(piece));
 
     // Never submit stale-generation bytes, during checking, or after a transport switch.
     if ((epoch != m_epoch) || !httpDispatchAllowed(m_machine.state()) || m_sink->isChecking() || !buffer)
     {
+        releaseBudget(piece);
         m_ownership.releaseFetch(piece);
+        syncPeerExclusion();
         return;
     }
+
+    if (m_machine.state() == TransportState::CombinedActive)
+    {
+        if (m_ownership.owner(piece) != PieceOwner::HttpFetching)
+        {
+            // A peer got there first (yieldToPeers) or the piece is already verified.
+            releaseBudget(piece);
+            syncPeerExclusion();
+            return;
+        }
+        if (!peerQueueClears(piece))
+        {
+            // No proof yet that peers stayed off this piece: wait for the next queue read.
+            m_awaitingQueue.insert(piece, {epoch, buffer});
+            requestPeerQueue();
+            return;
+        }
+    }
+
+    submit(piece, epoch, buffer);
+}
+
+void Hybrid::HybridCoordinator::submit(const int piece, const quint64 epoch, const PieceBuffer &buffer)
+{
+    releaseBudget(piece);
+    m_claimSeq.remove(piece);
     if (!m_ownership.markSubmitted(piece, epoch))
         return;
 
@@ -879,17 +1009,25 @@ void Hybrid::HybridCoordinator::onAssemblyCompleted(const int piece, const quint
     schedule();
 }
 
+void Hybrid::HybridCoordinator::releaseBudget(const int piece)
+{
+    const qint64 bytes = m_assemblyBytes.take(piece);
+    if (m_budget && (bytes > 0))
+        m_budget->release(bytes);
+}
+
 void Hybrid::HybridCoordinator::onAssemblyFailed(const int piece, const quint64 epoch, const RangeError &error, const int nativeFileIndex)
 {
     const QPointer<PieceAssembly> assembly = m_assemblies.take(piece);
     if (assembly)
         assembly->deleteLater();
-    if (m_budget)
-        m_budget->release(m_assemblyBytes.take(piece));
+    releaseBudget(piece);
+    m_claimSeq.remove(piece);
     if (epoch != m_epoch)
         return; // already released by releaseAllFetching()
 
     m_ownership.releaseFetch(piece);
+    syncPeerExclusion();
     m_status.failureDetail = describeRangeError(error);
     handleHttpFailure(error.category, error.retryAfterSeconds, nativeFileIndex);
 }
@@ -969,7 +1107,10 @@ void Hybrid::HybridCoordinator::notifyFinished()
 void Hybrid::HybridCoordinator::notifyPieceFinished(const int piece)
 {
     const PieceOwner previous = m_ownership.owner(piece);
+    if ((previous == PieceOwner::HttpFetching) && isCombined())
+        yieldToPeers(piece);   // verified from peers: stop fetching it
     m_ownership.markVerified(piece);
+    syncPeerExclusion();
     if (previous == PieceOwner::HttpSubmitted)
     {
         ++m_status.httpVerifiedPieces;
@@ -988,6 +1129,7 @@ void Hybrid::HybridCoordinator::notifyHashFailed(const int piece)
         return; // a peer's bad piece: libtorrent's own smart-ban handles it
 
     m_ownership.markHashFailed(piece);
+    syncPeerExclusion();
     ++m_status.httpHashFailures;
     // Provider bytes failed the original torrent's hash: quarantine the binding immediately.
     m_bound = false;
@@ -1046,4 +1188,198 @@ void Hybrid::HybridCoordinator::notifyProviderAccountChanged()
     const TransportState s = m_machine.state();
     if ((s == TransportState::WaitingForUser) || (s == TransportState::WaitingForProvider))
         fire(MachineEvent::RetryDue, Reason::UserRequest);
+}
+
+// ------------------------------------------------------------------------------- combined mode
+
+bool Hybrid::HybridCoordinator::needsPeerExclusion() const
+{
+    // Pieces need hiding only while peers may request them. Held states need nothing, and the
+    // serialized modes never hide anything (they behave as before ADR-011).
+    if (!isCombined())
+        return false;
+    switch (m_machine.state())
+    {
+    case TransportState::CombinedActive:
+    case TransportState::P2PActive:        // submitted pieces until their verdict
+    case TransportState::RecoveryProbing:
+    case TransportState::HttpReady:        // peers still draining
+        return true;
+    default:
+        return false;
+    }
+}
+
+void Hybrid::HybridCoordinator::syncPeerExclusion()
+{
+    // Hidden = owned by HTTP (fetching, waiting for a queue read, or submitted until the verdict).
+    QSet<int> desired;
+    if (needsPeerExclusion())
+    {
+        const auto consider = [this, &desired](const int piece)
+        {
+            const PieceOwner owner = m_ownership.owner(piece);
+            if ((owner == PieceOwner::HttpFetching) || (owner == PieceOwner::HttpSubmitted))
+                desired.insert(piece);
+        };
+        for (const int piece : asConst(m_excluded))
+            consider(piece);
+        for (auto it = m_assemblies.cbegin(); it != m_assemblies.cend(); ++it)
+            consider(it.key());
+        for (auto it = m_awaitingQueue.cbegin(); it != m_awaitingQueue.cend(); ++it)
+            consider(it.key());
+    }
+
+    QList<int> exclude;
+    QList<int> include;
+    for (const int piece : asConst(desired))
+    {
+        if (!m_excluded.contains(piece))
+            exclude.append(piece);
+    }
+    for (const int piece : asConst(m_excluded))
+    {
+        if (!desired.contains(piece))
+            include.append(piece);
+    }
+    if (exclude.isEmpty() && include.isEmpty())
+        return;
+
+    m_excluded = desired;
+    m_sink->setPeerExclusion(exclude, include);
+}
+
+void Hybrid::HybridCoordinator::requestPeerQueue()
+{
+    // One read at a time. A read that never answers (session shutting down) must not leave
+    // fetched pieces waiting forever, so after a while it counts as lost.
+    if (m_queueInFlight && ((m_clock() - m_queueRequestedAtMs) < 5'000))
+    {
+        m_queueAgain = true;
+        return;
+    }
+    m_queueInFlight = true;
+    m_queueAgain = false;
+    m_queueRequestedAtMs = m_clock();
+    const quint64 seq = ++m_queueRequested;
+    const quint64 generation = m_sink->peerExclusionGeneration();
+    m_sink->requestPeerQueue(this, [this, seq, generation](const QList<int> &queue)
+    {
+        onPeerQueue(seq, generation, queue);
+    });
+}
+
+bool Hybrid::HybridCoordinator::peerQueueClears(const int piece) const
+{
+    // Cleared by a read requested after the piece was hidden and after the last time the torrent
+    // had to hide it again. A read that listed it would already have handed it to peers.
+    return (m_queueDone >= m_claimSeq.value(piece, std::numeric_limits<quint64>::max()))
+            && (m_queueDoneGeneration == m_sink->peerExclusionGeneration());
+}
+
+void Hybrid::HybridCoordinator::onPeerQueue(const quint64 seq, const quint64 generation, const QList<int> &queue)
+{
+    m_queueInFlight = false;
+    if (seq > m_queueDone)
+    {
+        m_queueDone = seq;
+        m_queueDoneGeneration = generation;
+    }
+
+    if (m_machine.state() == TransportState::CombinedActive)
+    {
+        // A peer that requested a piece just before it was hidden keeps it: HTTP lets go, and the
+        // piece is shown to peers again so they can finish it. Provider bytes are never added
+        // to a piece peers have touched.
+        for (const int piece : queue)
+        {
+            if (m_ownership.owner(piece) == PieceOwner::HttpFetching)
+                yieldToPeers(piece);
+        }
+        m_ownership.reconcileP2PQueue(queue);
+        syncPeerExclusion();
+
+        const QList<int> awaiting = m_awaitingQueue.keys();
+        for (const int piece : awaiting)
+        {
+            if (!peerQueueClears(piece))
+                continue;
+            const AwaitingPiece entry = m_awaitingQueue.take(piece);
+            if ((entry.epoch == m_epoch) && (m_ownership.owner(piece) == PieceOwner::HttpFetching))
+                submit(piece, entry.epoch, entry.buffer);
+            else
+                releaseBudget(piece);
+        }
+        if (!m_awaitingQueue.isEmpty())
+            m_queueAgain = true;
+    }
+
+    if (m_queueAgain)
+        requestPeerQueue();
+    schedule();
+}
+
+void Hybrid::HybridCoordinator::yieldToPeers(const int piece)
+{
+    if (const auto it = m_assemblies.find(piece); it != m_assemblies.end())
+    {
+        if (it.value())
+        {
+            it.value()->abort();
+            it.value()->deleteLater();
+        }
+        m_assemblies.erase(it);
+    }
+    m_awaitingQueue.remove(piece);
+    releaseBudget(piece);
+    m_claimSeq.remove(piece);
+    m_ownership.releaseFetch(piece);
+    ++m_status.piecesYieldedToPeers;
+}
+
+int Hybrid::HybridCoordinator::tailThreshold() const
+{
+    return (m_config.tailPieces > 0) ? m_config.tailPieces : (2 * std::max(1, m_config.maxPiecesInFlight));
+}
+
+void Hybrid::HybridCoordinator::decideTail()
+{
+    if (m_machine.state() != TransportState::CombinedActive)
+        return;
+
+    // Measured goodput over the last seconds. Ties (including no data yet) go to the provider,
+    // the source the user preferred.
+    const qint64 httpRate = m_status.httpRateBps;
+    const qint64 peerRate = m_sink->peerDownloadRate();
+    if (hasProviderWork() && (httpRate >= peerRate))
+        fire(MachineEvent::TailToProvider, Reason::TailToProvider);
+    else
+        fire(MachineEvent::TailToPeers, Reason::TailToPeers);
+}
+
+void Hybrid::HybridCoordinator::watchPeerStall()
+{
+    // Peers were given the last pieces as the faster source. If they stop sending, the provider
+    // gets another chance (it then finishes as the faster source).
+    if (!m_tailDecided || (m_machine.state() != TransportState::P2PActive) || !isCombined())
+        return;
+    if (m_status.p2pRateBps > 0)
+    {
+        m_peerStallSinceMs = 0;
+        return;
+    }
+    const qint64 now = m_clock();
+    if (m_peerStallSinceMs == 0)
+    {
+        m_peerStallSinceMs = now;
+        return;
+    }
+    if (((now - m_peerStallSinceMs) < m_config.peerStallMs) || !m_health.dwellSatisfied() || m_health.needsUser()
+            || !m_provider || (m_provider->accountState() != AccountState::Connected) || !hasProviderWork())
+    {
+        return;
+    }
+    m_tailDecided = false;
+    m_peerStallSinceMs = 0;
+    fire(MachineEvent::RecoveryDue, Reason::PeersStalled);
 }

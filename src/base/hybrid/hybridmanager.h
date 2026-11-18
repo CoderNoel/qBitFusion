@@ -77,6 +77,9 @@ namespace Hybrid
         void setDefaultP2PConsent(bool consent);
         bool allowRemoteCreate() const;
         void setAllowRemoteCreate(bool allow);
+        // Combined mode (ADR-011): provider and peers at once for DebridPreferred torrents with consent.
+        bool combinedSources() const;
+        void setCombinedSources(bool enabled);
         int maxPiecesPerTorrent() const;
         void setMaxPiecesPerTorrent(int value);
         int maxGlobalPieces() const;

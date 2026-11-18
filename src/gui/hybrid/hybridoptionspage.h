@@ -69,6 +69,8 @@ namespace HybridGui
         QGroupBox *m_defaultsBox = nullptr;
         SourcePicker *m_picker = nullptr;
         QCheckBox *m_remoteCreate = nullptr;
+        QGroupBox *m_combinedBox = nullptr;
+        QCheckBox *m_combined = nullptr;
         QGroupBox *m_limitsBox = nullptr;
         QSpinBox *m_perTorrent = nullptr;
         QSpinBox *m_global = nullptr;

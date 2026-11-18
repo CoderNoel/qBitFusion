@@ -52,6 +52,7 @@ namespace
     const QString KEY_DEFAULT_POLICY = u"Hybrid/DefaultPolicy"_s;
     const QString KEY_DEFAULT_CONSENT = u"Hybrid/DefaultP2PConsent"_s;
     const QString KEY_ALLOW_REMOTE_CREATE = u"Hybrid/AllowRemoteCreate"_s;
+    const QString KEY_COMBINED_SOURCES = u"Hybrid/CombinedSources"_s;
     const QString KEY_MAX_PER_TORRENT = u"Hybrid/MaxHttpPiecesPerTorrent"_s;
     const QString KEY_MAX_GLOBAL = u"Hybrid/MaxHttpPiecesGlobal"_s;
     const QString KEY_MAX_BUFFER_MIB = u"Hybrid/MaxBufferedMiB"_s;
@@ -259,6 +260,21 @@ void Hybrid::HybridManager::setAllowRemoteCreate(const bool allow)
     emit settingsChanged();
 }
 
+bool Hybrid::HybridManager::combinedSources() const
+{
+    return setting<bool>(KEY_COMBINED_SOURCES, false);
+}
+
+void Hybrid::HybridManager::setCombinedSources(const bool enabled)
+{
+    if (enabled == combinedSources())
+        return;
+    setSetting<bool>(KEY_COMBINED_SOURCES, enabled);
+    for (const Entry &entry : asConst(m_entries))
+        entry.coordinator->setCombinedSources(enabled);
+    emit settingsChanged();
+}
+
 int Hybrid::HybridManager::maxPiecesPerTorrent() const
 {
     return std::clamp(setting<int>(KEY_MAX_PER_TORRENT, 4), 1, 32);
@@ -309,6 +325,7 @@ Hybrid::CoordinatorConfig Hybrid::HybridManager::coordinatorConfig() const
     CoordinatorConfig config;
     config.maxPiecesInFlight = maxPiecesPerTorrent();
     config.allowRemoteCreate = allowRemoteCreate();
+    config.combinedSources = combinedSources();
     return config;
 }
 
@@ -436,7 +453,8 @@ void Hybrid::HybridManager::ensureEntry(BitTorrent::Torrent *torrent)
         // fallback to peers can be understood from the log.
         const HybridStatus status = coordinator->status();
         const bool leftProvider = (to != TransportState::HttpActive) && (to != TransportState::HttpReady) && (to != TransportState::Completed)
-                && (to != TransportState::ProbingProvider) && (to != TransportState::RecoveryProbing);
+                && (to != TransportState::ProbingProvider) && (to != TransportState::RecoveryProbing)
+                && (to != TransportState::CombinedActive);
         if (leftProvider && !status.failureDetail.isEmpty())
             LogMsg(tr("Hybrid sources: provider not used. Detail: %1").arg(status.failureDetail), Log::WARNING);
 

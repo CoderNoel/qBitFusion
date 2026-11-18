@@ -61,6 +61,7 @@
 
 #include "base/exceptions.h"
 #include "base/global.h"
+#include "base/hybrid/ltlayout.h"
 #include "base/logger.h"
 #include "base/preferences.h"
 #include "base/types.h"
@@ -475,7 +476,8 @@ qlonglong TorrentImpl::totalSize() const
 // size without the "don't download" files
 qlonglong TorrentImpl::wantedSize() const
 {
-    return m_nativeStatus.total_wanted;
+    // qBitFusion: pieces hidden from peers while the provider fetches them (ADR-011) are still wanted.
+    return m_nativeStatus.total_wanted + m_hybridExcludedBytes;
 }
 
 qlonglong TorrentImpl::completedSize() const
@@ -985,13 +987,14 @@ qreal TorrentImpl::progress() const
     if (isChecking())
         return m_nativeStatus.progress;
 
-    if (m_nativeStatus.total_wanted == 0)
+    const qlonglong wanted = wantedSize();
+    if (wanted == 0)
         return 0.;
 
-    if (m_nativeStatus.total_wanted_done == m_nativeStatus.total_wanted)
+    if (m_nativeStatus.total_wanted_done == wanted)
         return 1.;
 
-    const qreal progress = static_cast<qreal>(m_nativeStatus.total_wanted_done) / m_nativeStatus.total_wanted;
+    const qreal progress = static_cast<qreal>(m_nativeStatus.total_wanted_done) / wanted;
     if ((progress < 0.f) || (progress > 1.f))
     {
         LogMsg(tr("Unexpected data detected. Torrent: %1. Data: total_wanted=%2 total_wanted_done=%3.")
@@ -1841,6 +1844,17 @@ void TorrentImpl::applyFirstLastPiecePriority(const bool enabled)
 {
     Q_ASSERT(hasMetadata());
 
+    m_nativeHandle.prioritize_pieces(firstLastPiecePriorities(enabled));
+
+    // qBitFusion: this replaced every piece priority, including pieces hidden from peers while
+    // the hybrid transport fetches them (ADR-011). Hide them again.
+    m_piecePriorityRule = enabled ? PiecePriorityRule::FirstLastOn : PiecePriorityRule::FirstLastOff;
+    m_userPiecePriorities.clear();
+    reapplyHybridPeerExclusion();
+}
+
+std::vector<lt::download_priority_t> TorrentImpl::firstLastPiecePriorities(const bool enabled) const
+{
     // Download first and last pieces first for every file in the torrent
 
     auto piecePriorities = std::vector<lt::download_priority_t>(m_torrentInfo.piecesCount(), LT::toNative(DownloadPriority::Ignored));
@@ -1871,7 +1885,121 @@ void TorrentImpl::applyFirstLastPiecePriority(const bool enabled)
             piecePriorities[pieceIndex] = LT::toNative(filePrio);
     }
 
-    m_nativeHandle.prioritize_pieces(piecePriorities);
+    return piecePriorities;
+}
+
+std::vector<lt::download_priority_t> TorrentImpl::filePiecePriorities() const
+{
+    // What libtorrent derives from the file priorities prioritizeFiles() passed to it.
+    const std::shared_ptr<const lt::torrent_info> info = m_torrentInfo.nativeInfo();
+    auto nativePriorities = std::vector<lt::download_priority_t>(info->num_files(), LT::toNative(DownloadPriority::Normal));
+    const auto nativeIndexes = m_torrentInfo.nativeIndexes();
+    for (qsizetype i = 0; (i < m_filePriorities.size()) && (i < nativeIndexes.size()); ++i)
+        nativePriorities[LT::toUnderlyingType(nativeIndexes[i])] = LT::toNative(m_filePriorities[i]);
+    return Hybrid::filePiecePriorities(*info, nativePriorities);
+}
+
+lt::download_priority_t TorrentImpl::userPiecePriority(const int piece)
+{
+    if (m_userPiecePriorities.empty())
+    {
+        switch (m_piecePriorityRule)
+        {
+        case PiecePriorityRule::Files:
+            m_userPiecePriorities = filePiecePriorities();
+            break;
+        case PiecePriorityRule::FirstLastOff:
+            m_userPiecePriorities = firstLastPiecePriorities(false);
+            break;
+        case PiecePriorityRule::FirstLastOn:
+            m_userPiecePriorities = firstLastPiecePriorities(true);
+            break;
+        }
+    }
+    return ((piece >= 0) && (static_cast<std::size_t>(piece) < m_userPiecePriorities.size()))
+            ? m_userPiecePriorities[piece] : LT::toNative(DownloadPriority::Normal);
+}
+
+void TorrentImpl::setHybridPeerExclusion(const QList<int> &exclude, const QList<int> &include)
+{
+    // Combined sources (qBitFusion ADR-011): a piece the provider is fetching gets libtorrent
+    // priority 0, so no peer requests it. File priorities are never touched. The value restored
+    // is the one qBittorrent itself set (userPiecePriority), resume data is written with those
+    // values (prepareResumeData), and anything that resets piece priorities re-applies the
+    // exclusion afterwards (reapplyHybridPeerExclusion).
+    if (!hasMetadata())
+        return;
+
+    std::vector<std::pair<lt::piece_index_t, lt::download_priority_t>> changes;
+    for (const int piece : include)
+    {
+        if (m_hybridExcludedPieces.remove(piece))
+        {
+            changes.emplace_back(lt::piece_index_t {piece}, userPiecePriority(piece));
+            m_hybridExcludedBytes -= m_torrentInfo.pieceLength(piece);
+        }
+    }
+    for (const int piece : exclude)
+    {
+        if ((piece < 0) || (piece >= piecesCount()) || m_hybridExcludedPieces.contains(piece))
+            continue;
+        m_hybridExcludedPieces.insert(piece);
+        changes.emplace_back(lt::piece_index_t {piece}, lt::dont_download);
+        m_hybridExcludedBytes += m_torrentInfo.pieceLength(piece);
+    }
+    if (changes.empty())
+        return;
+
+    m_nativeHandle.prioritize_pieces(changes);
+
+    if (m_hybridExcludedPieces.isEmpty())
+    {
+        m_hybridExcludedBytes = 0;
+        m_userPiecePriorities = {};
+        if (m_hybridFinishDeferred)
+        {
+            // libtorrent may have reported "finished" while only hidden pieces were left. If those
+            // were all verified meanwhile, it stays finished and posts no new alert: ask it. The
+            // query runs after the priority change above.
+            invokeAsync([nativeHandle = m_nativeHandle]
+            {
+                try
+                {
+                    const lt::torrent_status::state_t state = nativeHandle.status({}).state;
+                    return (state == lt::torrent_status::finished) || (state == lt::torrent_status::seeding);
+                }
+                catch (const std::exception &) {}
+                return false;
+            }).then(this, [this](const bool finished)
+            {
+                if (finished && m_hybridFinishDeferred && m_hybridExcludedPieces.isEmpty())
+                    handleTorrentFinished();
+            });
+        }
+    }
+}
+
+void TorrentImpl::reapplyHybridPeerExclusion()
+{
+    if (m_hybridExcludedPieces.isEmpty())
+        return;
+
+    ++m_hybridExclusionGeneration;
+    std::vector<std::pair<lt::piece_index_t, lt::download_priority_t>> changes;
+    changes.reserve(m_hybridExcludedPieces.size());
+    for (const int piece : asConst(m_hybridExcludedPieces))
+        changes.emplace_back(lt::piece_index_t {piece}, lt::dont_download);
+    m_nativeHandle.prioritize_pieces(changes);
+}
+
+quint64 TorrentImpl::hybridPeerExclusionGeneration() const
+{
+    return m_hybridExclusionGeneration;
+}
+
+qint64 TorrentImpl::hybridPeerDownloadRate() const
+{
+    return isStopped() ? 0 : m_nativeStatus.download_payload_rate;
 }
 
 TrackerEntryStatus TorrentImpl::updateTrackerEntryStatus(const lt::announce_entry &announceEntry, const QHash<lt::tcp::endpoint, QMap<int, int>> &updateInfo)
@@ -2053,6 +2181,8 @@ void TorrentImpl::reload()
 
         m_nativeHandle = m_session->reloadTorrent(m_nativeHandle, std::move(p));
         m_nativeStatus = static_cast<ExtensionData *>(m_nativeHandle.userdata())->status;
+        // qBitFusion: the new handle was added with the user's piece priorities (ADR-011).
+        reapplyHybridPeerExclusion();
 
         if (queuePos >= lt::queue_position_t {})
             m_nativeHandle.queue_position_set(queuePos);
@@ -2253,6 +2383,19 @@ void TorrentImpl::handleTorrentChecked()
 
 void TorrentImpl::handleTorrentFinished()
 {
+    // qBitFusion: libtorrent treats pieces hidden from peers (priority 0, ADR-011) as unwanted, so
+    // it can report "finished" while the provider is still delivering them. Completion handling
+    // (moving files, notifications, the "run on finish" program) waits until they are in.
+    for (const int piece : asConst(m_hybridExcludedPieces))
+    {
+        if (!m_nativeHandle.have_piece(lt::piece_index_t {piece}))
+        {
+            m_hybridFinishDeferred = true;
+            return;
+        }
+    }
+    m_hybridFinishDeferred = false;
+
     m_hasMissingFiles = false;
     if (m_hasFinishedStatus)
         return;
@@ -2350,6 +2493,17 @@ void TorrentImpl::handleSaveResumeData(lt::add_torrent_params params)
 
 void TorrentImpl::prepareResumeData(lt::add_torrent_params params)
 {
+    // qBitFusion: pieces hidden from peers while the hybrid transport fetches them (ADR-011) are
+    // saved with the user's own priority, never with the temporary 0.
+    if (!m_hybridExcludedPieces.isEmpty() && !params.piece_priorities.empty())
+    {
+        for (const int piece : asConst(m_hybridExcludedPieces))
+        {
+            if (static_cast<std::size_t>(piece) < params.piece_priorities.size())
+                params.piece_priorities[piece] = userPiecePriority(piece);
+        }
+    }
+
     {
         decltype(params.have_pieces) havePieces;
         decltype(params.unfinished_pieces) unfinishedPieces;
@@ -3120,9 +3274,14 @@ void TorrentImpl::prioritizeFiles(const QList<DownloadPriority> &priorities)
     m_nativeHandle.prioritize_files(nativePriorities);
 
     m_filePriorities = priorities;
+    // qBitFusion: libtorrent derived every piece priority from the files again (ADR-011).
+    m_piecePriorityRule = PiecePriorityRule::Files;
+    m_userPiecePriorities.clear();
     // Restore first/last piece first option if necessary
     if (m_hasFirstLastPiecePriority)
         applyFirstLastPiecePriority(true);
+    else
+        reapplyHybridPeerExclusion();
     manageActualFilePaths();
 }
 

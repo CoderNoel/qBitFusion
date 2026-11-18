@@ -28,6 +28,9 @@
 
 #pragma once
 
+#include <vector>
+
+#include <libtorrent/download_priority.hpp>
 #include <libtorrent/fwd.hpp>
 
 #include <QList>
@@ -46,4 +49,11 @@ namespace Hybrid
     QList<PieceSlice> nativePieceSlices(const lt::torrent_info &info, int piece);
     qint64 nativePieceLength(const lt::torrent_info &info, int piece);
     TorrentIdentity nativeIdentity(const lt::info_hash_t &hashes, const QString &name);
+
+    // The piece priorities libtorrent derives from file priorities alone (file_to_piece_prio in
+    // its torrent.cpp): a piece gets the highest priority of the files it touches; pad and empty
+    // files are skipped; files without an entry get libtorrent's default. Used to give pieces
+    // hidden from peers back exactly what qBittorrent set (ADR-011).
+    std::vector<lt::download_priority_t> filePiecePriorities(const lt::torrent_info &info
+            , const std::vector<lt::download_priority_t> &nativeFilePriorities);
 }

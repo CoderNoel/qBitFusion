@@ -58,6 +58,7 @@ namespace Hybrid
         HttpDraining,
         P2PActive,
         RecoveryProbing,
+        CombinedActive,          // provider and peers on different pieces at once (ADR-011)
         WaitingForProvider,
         WaitingForUser,
         Paused,
@@ -73,7 +74,8 @@ namespace Hybrid
         None,
         Http,
         P2P,
-        Switching
+        Switching,
+        Combined
     };
     Q_ENUM_NS(ActiveTransport)
 
@@ -105,7 +107,11 @@ namespace Hybrid
         RecheckStarted,
         RecheckFinished,
         DownloadComplete,
-        TorrentRemoved
+        TorrentRemoved,
+        CombinedSources,
+        TailToProvider,
+        TailToPeers,
+        PeersStalled
     };
     Q_ENUM_NS(Reason)
 

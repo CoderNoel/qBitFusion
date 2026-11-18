@@ -56,6 +56,10 @@ namespace BitTorrent
         void setTransportHold(bool hold) override;
         bool isTransportHoldSettled() const override;
         void addPiece(int piece, std::vector<char> &&data) override;
+        void setPeerExclusion(const QList<int> &exclude, const QList<int> &include) override;
+        quint64 peerExclusionGeneration() const override;
+        void requestPeerQueue(QObject *context, std::function<void (const QList<int> &pieces)> done) override;
+        qint64 peerDownloadRate() const override;
 
         void setHttpRate(qint64 bytesPerSecond);
 

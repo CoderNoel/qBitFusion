@@ -17,7 +17,7 @@ Last reviewed: 2026-11-18.
 
 | Area | Where | Contents |
 | --- | --- | --- |
-| Hybrid core | `src/base/hybrid/` | Types, strict Range validation, URL guard, exact file binding, piece ownership arbiter, provider health and back-off, the transport state machine, per-torrent policy sidecar, token bucket, range fetcher, piece assembler, coordinator, libtorrent layout adapter, manager, Windows credential store, Real-Debrid adapter. |
+| Hybrid core | `src/base/hybrid/` | Types, strict Range validation, URL guard, exact file binding, piece ownership arbiter, provider health and back-off, the transport state machine, per-torrent policy sidecar, token bucket, range fetcher, piece assembler, coordinator (sources in turn, or both at once as an option, ADR-011), libtorrent layout adapter, manager, Windows credential store, Real-Debrid adapter. |
 | Hooks in qBittorrent's core | `src/base/bittorrent/` | `hybridhooks.h` and `hybridtorrentsink.*` (new). `session.h`, `sessionimpl.*`: hold at add and load, piece alerts, recheck hook. `torrentimpl.*`: transport hold, HTTPS rate, `addExternalPiece`. `app/application.cpp`: start-up and shutdown. |
 | Hybrid GUI | `src/gui/hybrid/` | Options page, source picker, consent prompt, device sign-in dialog, the Source column and its context menu. |
 | Modern look | `src/gui/modern/` | Light and dark palettes with a configurable accent, one stylesheet, a 108-glyph monochrome icon set tinted at paint time, the app mark, and the shell widgets (page switcher, sidebar rows, empty state, accent picker). `mainwindow.*` builds the header and action bar; the menu bar is hidden and its actions stay registered on the window so shortcuts keep working. |
@@ -31,7 +31,13 @@ These are the points to re-check when merging a new upstream release (see [UPSTR
 
 - `BitTorrent::Session`: `static setHybridHooks()` / `hybridHooks()`, `virtual setHybridAlertsEnabled()`.
 - `TorrentImpl` (internal): `setTransportHold`, `isTransportHeld`, `setHybridHttpRate`, `hybridHttpRate`,
-  `addExternalPiece`.
+  `addExternalPiece`, and for combined sources (ADR-011) `setHybridPeerExclusion`,
+  `hybridPeerExclusionGeneration`, `hybridPeerDownloadRate`. To keep the user's piece priorities while
+  some pieces are hidden from peers, `applyFirstLastPiecePriority()` was split (the vector is now built by
+  `firstLastPiecePriorities()`), `prioritizeFiles()`, `reload()` and `prepareResumeData()` re-apply or
+  undo the exclusion, `wantedSize()` and `progress()` count hidden pieces as wanted, and
+  `handleTorrentFinished()` waits while a hidden piece is missing. All of this is inert while nothing is
+  hidden, which is always the case unless combined sources are switched on.
 - `TransferListModel::TR_SOURCE`: a column appended at the end, so saved header state stays compatible.
 - Settings keys under `Hybrid/`. Per-torrent sidecars in `<profile>/data/hybrid/<id>.hybrid.json`, which
   hold no secrets.
@@ -66,7 +72,8 @@ self-updater, one for direct downloads). All pass.
 
 - Unit suites: range parsing with a 20 000-case fuzz, URL guard, file binding, piece ownership (20 000
   random operations), provider health, the state machine (including a 50 000-event check that
-  `debrid_only` never permits P2P), sidecar, token bucket, and the range fetcher against hostile local
+  `debrid_only` never permits P2P, now also with the combined-mode events and with combined mode asked
+  for where P2P is forbidden), sidecar, token bucket, and the range fetcher against hostile local
   responses.
 - `testhybridcoordinator` drives a real libtorrent session against a local HTTP server and a fixture
   provider:
@@ -79,6 +86,16 @@ self-updater, one for direct downloads). All pass.
   - Provider lacks one file: HTTPS verifies exactly the fully covered pieces, then peers fetch the rest
     (`debrid_preferred`), or the torrent stops with `provider_lacks_pieces` and no swarm contact
     (`debrid_only`).
+  - Combined sources (ADR-011), each run checked for byte-identical output, no hash failures, no provider
+    piece submitted while libtorrent's download queue listed it (checked independently at the moment of
+    `add_piece`), no piece submitted twice, peers fetching no more than the pieces HTTPS did not supply,
+    every hidden piece given back its exact priority, and libtorrent never reporting "finished" with a
+    piece missing: both sources together on v1 and hybrid torrents; the last pieces going to the faster
+    source either way; a provider outage mid-download (peers finish); the only seed vanishing
+    mid-download (the provider finishes); the setting switched on for "Debrid only" and for "Debrid
+    preferred" without consent (no swarm contact, nothing hidden). The libtorrent file-to-piece priority
+    rule that the exclusion restores is compared with libtorrent itself on v1, hybrid and v2 torrents.
+  - Serialized runs now also check that no piece priority is ever touched.
 - The libtorrent spike (`build-windows.ps1 -Spike`) passes 35 of 35 checks; its findings are in
   DECISIONS.md.
 
@@ -146,26 +163,33 @@ Hybrid transport:
    includes the HTTPS rate, but has no test of its own.
 10. **Parallelism.** Four parallel HTTPS requests per torrent by default
     (`Hybrid/MaxHttpPiecesPerTorrent`). Whether that limits fast connections has not been measured.
+11. **Combined sources** (ADR-011) were measured on loopback only, with one seed and 16 KiB pieces, not
+    against the real service or a real swarm. The parts inside `TorrentImpl` (the priority written to
+    resume data, re-applying the exclusion after a file priority change or reload, waiting with
+    completion while a hidden piece is missing) have no automated test of their own; the coordinator
+    tests use a plain libtorrent handle. While combined sources run, a torrent's peers see your IP
+    address from the start of the download. A user who changes file priorities very often makes
+    pieces wait for an extra read of the download queue.
 
 Interface:
 
-11. **Review coverage.** Checked by screenshot at 150% scaling in the dark scheme: main window, menus,
+12. **Review coverage.** Checked by screenshot at 150% scaling in the dark scheme: main window, menus,
     sidebar, properties panel, add-torrent dialog, and the Behavior, Downloads, Hybrid sources, Speed and
     Advanced pages of Options. Changed since their last check: Statistics, Torrent Creator, About, the
     delete confirmation, download-from-URL, the RSS warning, sliders, and the light scheme. Not checked at
     100% scaling.
-12. **Left as inherited.** Title Case labels, uneven label and field alignment in some Options rows, the
+13. **Left as inherited.** Title Case labels, uneven label and field alignment in some Options rows, the
     last column cut off on the Trackers and Peers tabs, the framing of the Search, RSS and Log pages, and
     the properties grid at very narrow widths.
-13. **Translations.** Text that now says qBitFusion, and all new text, is English only; other languages
+14. **Translations.** Text that now says qBitFusion, and all new text, is English only; other languages
     fall back to English for it.
-14. **One-time layout changes.** The first time the feature is used, the Source column is placed next to
+15. **One-time layout changes.** The first time the feature is used, the Source column is placed next to
     Status and the Name column is widened (`GUI/HybridSourceColumnPlaced`, `GUI/ModernNameColumnSized`).
 
 Distribution:
 
-15. No installer and no code signing.
-16. **Self-update** (2026-11-13): unit tests cover the version order, the Ed25519 signature check, the
+16. No installer and no code signing.
+17. **Self-update** (2026-11-13): unit tests cover the version order, the Ed25519 signature check, the
     rejection of unsigned, altered or foreign-hosted update descriptions, and the file swap that keeps the
     profile. The whole path (download, unpack, install at start-up, restart) was tried once on this
     machine against a local test server. The Release and upstream-sync workflows had not run on GitHub yet
@@ -173,23 +197,23 @@ Distribution:
 
 Direct downloads:
 
-17. **No live debrid run.** Tested against the local test server and, in a test instance, against public
+18. **No live debrid run.** Tested against the local test server and, in a test instance, against public
     file servers (download.blender.org, archive.org with its redirects), including pause, quit and
     restart; both files resumed across the restart matched archive.org's MD5. Not yet with a real Stremio
     add-on link or a Real-Debrid download link.
-18. **One connection per file.** A rough measurement on 2026-11-18 (while a build was running): a public
+19. **One connection per file.** A rough measurement on 2026-11-18 (while a build was running): a public
     server in France served about 4 MiB/s on one connection and about 6.3 MiB/s on four. Splitting a file
     into parallel ranges is open work; it needs the segment state saved for resume and must respect the
     provider's connection limits.
-19. **No checksum.** Only the size and the ETag are checked. Writes are not flushed to the disk with
+20. **No checksum.** Only the size and the ETag are checked. Writes are not flushed to the disk with
     `fsync`, so after a power cut the end of a partial file may hold zeros; the download then continues
     after them.
-20. **Fixed limits.** Three downloads at a time, a retry schedule of 5 s to 5 min with six attempts, and
+21. **Fixed limits.** Three downloads at a time, a retry schedule of 5 s to 5 min with six attempts, and
     the add dialog always shown. None of this is in Options yet. The status bar, the speed graph and the
     session statistics count torrent traffic only; the Links page shows its own total speed.
-21. **Other add paths.** The Web UI, the Web API, RSS and watched folders still treat every link as a
+22. **Other add paths.** The Web UI, the Web API, RSS and watched folders still treat every link as a
     torrent.
-22. **Placeholder videos.** Some add-ons redirect to a short "still caching" video when the debrid service
+23. **Placeholder videos.** Some add-ons redirect to a short "still caching" video when the debrid service
     does not have the file yet. That video is downloaded like any other file.
 
 ## Next

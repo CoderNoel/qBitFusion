@@ -80,7 +80,11 @@ namespace
         {Hybrid::Reason::RecheckStarted, u"recheck_started"},
         {Hybrid::Reason::RecheckFinished, u"recheck_finished"},
         {Hybrid::Reason::DownloadComplete, u"download_complete"},
-        {Hybrid::Reason::TorrentRemoved, u"torrent_removed"}
+        {Hybrid::Reason::TorrentRemoved, u"torrent_removed"},
+        {Hybrid::Reason::CombinedSources, u"combined_sources"},
+        {Hybrid::Reason::TailToProvider, u"tail_to_provider"},
+        {Hybrid::Reason::TailToPeers, u"tail_to_peers"},
+        {Hybrid::Reason::PeersStalled, u"peers_stalled"}
     };
 }
 
@@ -139,6 +143,8 @@ QString Hybrid::wireName(const ActiveTransport transport)
         return u"p2p"_s;
     case ActiveTransport::Switching:
         return u"switching"_s;
+    case ActiveTransport::Combined:
+        return u"combined"_s;
     }
     return u"none"_s;
 }
@@ -226,6 +232,8 @@ QString Hybrid::displayName(const TransportState state)
         return tr("BitTorrent");
     case TransportState::RecoveryProbing:
         return tr("BitTorrent, checking provider");
+    case TransportState::CombinedActive:
+        return tr("Debrid + peers");
     case TransportState::WaitingForProvider:
         return tr("Waiting for provider");
     case TransportState::WaitingForUser:
@@ -298,6 +306,14 @@ QString Hybrid::displayText(const Reason reason)
         return tr("Download complete");
     case Reason::TorrentRemoved:
         return tr("Torrent removed");
+    case Reason::CombinedSources:
+        return tr("Downloading from the provider and from peers at the same time");
+    case Reason::TailToProvider:
+        return tr("Last pieces left to the provider, the faster source");
+    case Reason::TailToPeers:
+        return tr("Last pieces left to peers, the faster source");
+    case Reason::PeersStalled:
+        return tr("Peers stopped sending data");
     }
     return {};
 }

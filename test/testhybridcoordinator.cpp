@@ -34,6 +34,9 @@
 #include <filesystem>
 #include <fstream>
 
+#include <map>
+#include <set>
+
 #include <libtorrent/add_torrent_params.hpp>
 #include <libtorrent/alert_types.hpp>
 #include <libtorrent/create_torrent.hpp>
@@ -46,6 +49,7 @@
 #include <libtorrent/torrent_status.hpp>
 
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QNetworkAccessManager>
 #include <QTcpServer>
@@ -230,20 +234,24 @@ namespace
         QList<PieceSlice> pieceSlices(const int p) const override { return nativePieceSlices(*info, p); }
         qint64 pieceLength(const int p) const override { return nativePieceLength(*info, p); }
 
+        // One status call per read, like the app's cached bitfield; a call per piece made the
+        // test's own main thread the bottleneck once both sources were busy.
         QBitArray havePieces() const override
         {
+            const lt::typed_bitfield<lt::piece_index_t> pieces = handle.status(lt::torrent_handle::query_pieces).pieces;
             QBitArray b(info->num_pieces());
             for (int p = 0; p < info->num_pieces(); ++p)
-                b.setBit(p, handle.have_piece(lt::piece_index_t {p}));
+                b.setBit(p, (p < pieces.size()) && pieces.get_bit(lt::piece_index_t {p}));
             return b;
         }
 
         QList<int> wantedMissingPieces() const override
         {
+            const QBitArray have = havePieces();
             QList<int> out;
-            for (int p = 0; p < info->num_pieces(); ++p)
+            for (int p = 0; p < have.size(); ++p)
             {
-                if (!handle.have_piece(lt::piece_index_t {p}))
+                if (!have.testBit(p))
                     out.append(p);
             }
             return out;
@@ -272,20 +280,81 @@ namespace
 
         void addPiece(const int piece, std::vector<char> &&data) override
         {
+            // Independent of the coordinator: at the moment of submission, no peer may have
+            // requested or delivered any block of this piece (design rule 4).
+            for (const lt::partial_piece_info &info : handle.get_download_queue())
+            {
+                if (static_cast<int>(info.piece_index) == piece)
+                    ++submitsIntoPeerPieces;
+            }
+            if (submitted.contains(piece))
+                ++resubmissions;
+            submitted.insert(piece);
             handle.add_piece(lt::piece_index_t {piece}, std::move(data));
         }
+
+        // Combined mode. The priority restored is whatever the piece had before (here libtorrent's
+        // default, as the test never sets priorities itself).
+        void setPeerExclusion(const QList<int> &exclude, const QList<int> &include) override
+        {
+            ++exclusionCalls;
+            std::vector<std::pair<lt::piece_index_t, lt::download_priority_t>> changes;
+            for (const int piece : include)
+            {
+                if (const auto it = saved.find(piece); it != saved.end())
+                {
+                    changes.emplace_back(lt::piece_index_t {piece}, it->second);
+                    saved.erase(it);
+                }
+            }
+            for (const int piece : exclude)
+            {
+                if (saved.contains(piece))
+                    continue;
+                saved[piece] = handle.piece_priority(lt::piece_index_t {piece});
+                everExcluded.insert(piece);
+                changes.emplace_back(lt::piece_index_t {piece}, lt::dont_download);
+            }
+            handle.prioritize_pieces(changes);
+        }
+
+        quint64 peerExclusionGeneration() const override { return 0; }
+
+        void requestPeerQueue(QObject *context, std::function<void (const QList<int> &)> done) override
+        {
+            QList<int> pieces;
+            for (const lt::partial_piece_info &info : handle.get_download_queue())
+                pieces.append(static_cast<int>(info.piece_index));
+            QMetaObject::invokeMethod(context, [done = std::move(done), pieces] { done(pieces); }, Qt::QueuedConnection);
+        }
+
+        qint64 peerDownloadRate() const override { return handle.status({}).download_payload_rate; }
+
+        std::map<int, lt::download_priority_t> saved;
+        std::set<int> everExcluded;
+        std::set<int> submitted;
+        int exclusionCalls = 0;
+        int submitsIntoPeerPieces = 0;
+        int resubmissions = 0;
     };
 
     lt::session_params isolated()
     {
         lt::settings_pack p;
-        p.set_int(lt::settings_pack::alert_mask, lt::alert_category::all);
+        // What the app subscribes to. "all" includes the per-peer debug log, which overflows the
+        // alert queue once a seed is connected and then drops piece verdicts.
+        p.set_int(lt::settings_pack::alert_mask, lt::alert_category::status | lt::alert_category::piece_progress
+                | lt::alert_category::error | lt::alert_category::storage);
         p.set_str(lt::settings_pack::listen_interfaces, "127.0.0.1:0");
         p.set_bool(lt::settings_pack::enable_dht, false);
         p.set_bool(lt::settings_pack::enable_lsd, false);
         p.set_bool(lt::settings_pack::enable_upnp, false);
         p.set_bool(lt::settings_pack::enable_natpmp, false);
         p.set_bool(lt::settings_pack::allow_multiple_connections_per_ip, true);
+        // TCP only: on loopback an outgoing uTP connection to the local seed was seen to stay in
+        // its handshake for many seconds, so the swarm side of a test depended on luck.
+        p.set_bool(lt::settings_pack::enable_outgoing_utp, false);
+        p.set_bool(lt::settings_pack::enable_incoming_utp, false);
         return lt::session_params(std::move(p));
     }
 
@@ -321,17 +390,21 @@ private:
         std::unique_ptr<HybridCoordinator> coord;
         QTimer pump;
         bool finished = false;
+        int haveAtFinish = -1;      // pieces verified when libtorrent said "finished"
         int hashFailures = 0;
+        QList<TransportState> states;
+        QList<Reason> reasons;
+        std::unique_ptr<lt::session> seed;
     };
 
-    void build(Rig &r, const lt::create_flags_t flags, const CoordinatorConfig &config)
+    void build(Rig &r, const lt::create_flags_t flags, const CoordinatorConfig &config, const int scale = 1)
     {
         QVERIFY(r.dir.isValid());
         r.src = fs::path(r.dir.path().toStdWString()) / "src";
         r.save = fs::path(r.dir.path().toStdWString()) / "save";
         const fs::path root = r.src / "Fixture";
         fs::create_directories(root / "sub");
-        const QList<std::pair<std::string, int>> files {{"a.bin", 100'000}, {"sub/b.bin", 70'001}, {"c.bin", 130'000}};
+        const QList<std::pair<std::string, int>> files {{"a.bin", 100'000 * scale}, {"sub/b.bin", 70'001 * scale}, {"c.bin", 130'000 * scale}};
         quint32 seed = 7;
         for (const auto &[name, size] : files)
         {
@@ -367,6 +440,11 @@ private:
                 && r.sink.handle.status({}).state != lt::torrent_status::checking_files, 10000);
 
         r.coord = std::make_unique<HybridCoordinator>(&r.sink, &r.provider, &r.network, &r.budget, &r.bucket, config, now);
+        connect(r.coord.get(), &HybridCoordinator::transitioned, r.coord.get(), [&r](TransportState, const TransportState to, const Reason reason)
+        {
+            r.states.append(to);
+            r.reasons.append(reason);
+        });
         r.pump.setInterval(5);
         connect(&r.pump, &QTimer::timeout, r.coord.get(), [&r]
         {
@@ -383,6 +461,8 @@ private:
                 }
                 else if (lt::alert_cast<lt::torrent_finished_alert>(a))
                 {
+                    if (!r.finished)
+                        r.haveAtFinish = r.sink.havePieces().count(true);
                     r.finished = true;
                     r.coord->notifyFinished();
                 }
@@ -407,14 +487,25 @@ private:
 
     static bool outputMatches(Rig &r)
     {
+        // libtorrent may report completion before its last writes reach the disk (spike Q1b), so
+        // allow the flush some time on larger fixtures.
         r.sink.handle.flush_cache();
-        QTest::qWait(300);
-        for (const TorrentFileEntry &f : nativeFileEntries(*r.sink.info))
+        for (int attempt = 0; attempt < 25; ++attempt)
         {
-            if (!f.isPad && (readAll(r.src / f.path.toStdString()) != readAll(r.save / f.path.toStdString())))
-                return false;
+            QTest::qWait(200);
+            bool same = true;
+            for (const TorrentFileEntry &f : nativeFileEntries(*r.sink.info))
+            {
+                if (!f.isPad && (readAll(r.src / f.path.toStdString()) != readAll(r.save / f.path.toStdString())))
+                {
+                    same = false;
+                    break;
+                }
+            }
+            if (same)
+                return true;
         }
-        return true;
+        return false;
     }
 
     // Removes the torrent's first file from what the provider exposes, as when only some files
@@ -436,6 +527,67 @@ private:
                 ++count;
         }
         return count;
+    }
+
+    static CoordinatorConfig combinedConfig()
+    {
+        CoordinatorConfig c = fastConfig();
+        c.combinedSources = true;
+        c.peerQueueIntervalMs = 100;
+        c.peerStallMs = 1500;
+        return c;
+    }
+
+    // A local seed standing in for the swarm, limited to `bytesPerSecond` (0 = unlimited).
+    static void startSeed(Rig &r, const int bytesPerSecond)
+    {
+        r.seed = std::make_unique<lt::session>(isolated());
+        lt::add_torrent_params seedAtp;
+        seedAtp.ti = std::make_shared<lt::torrent_info>(*r.sink.info);
+        seedAtp.save_path = r.src.string();   // checked normally: seed_mode served no v2 data here
+        const lt::torrent_handle seedHandle = r.seed->add_torrent(seedAtp);
+        if (bytesPerSecond > 0)
+            seedHandle.set_upload_limit(bytesPerSecond);
+        QTRY_VERIFY_WITH_TIMEOUT(r.seed->listen_port() != 0, 5000);
+        // A peer that connects before the seed's torrent is ready is turned away and retried only
+        // much later.
+        QTRY_VERIFY_WITH_TIMEOUT(seedHandle.status({}).state == lt::torrent_status::seeding, 20000);
+        r.sink.handle.connect_peer({boost::asio::ip::make_address("127.0.0.1"), static_cast<unsigned short>(r.seed->listen_port())});
+    }
+
+    static qint64 piecesBytes(const Rig &r, const int count)
+    {
+        return static_cast<qint64>(count) * r.sink.info->piece_length();
+    }
+
+    // One line describing a run, for failure messages.
+    static QString describe(Rig &r)
+    {
+        const OwnershipCounts c = r.coord->ownership().counts();
+        const lt::torrent_status st = r.sink.handle.status({});
+        QStringList path;
+        for (qsizetype i = 0; i < r.states.size(); ++i)
+            path << (wireName(r.states[i]) + u'(' + wireName(r.reasons[i]) + u')');
+        return u"have %1/%2 at finish %3, provider %4, hidden %5, owners f%6 s%7 p%8 v%9, peers %10, p2p bytes %11; %12"_s
+                .arg(r.sink.havePieces().count(true)).arg(r.sink.info->num_pieces()).arg(r.haveAtFinish)
+                .arg(r.coord->status().httpVerifiedPieces).arg(r.sink.saved.size())
+                .arg(c.httpFetching).arg(c.httpSubmitted).arg(c.p2pActive).arg(c.verified)
+                .arg(st.num_peers).arg(st.total_payload_download).arg(path.join(u" > "));
+    }
+
+    // Combined-mode invariants that must hold at the end of every run.
+    static void verifyCombinedRun(Rig &r)
+    {
+        const int n = r.sink.info->num_pieces();
+        QVERIFY2(outputMatches(r), qPrintable(describe(r)));
+        QCOMPARE(r.haveAtFinish, n);                       // never "finished" with hidden pieces missing
+        QCOMPARE(r.hashFailures, 0);
+        QCOMPARE(r.coord->ownership().collisions(), 0);
+        QCOMPARE(r.sink.submitsIntoPeerPieces, 0);         // no provider bytes into a peer's piece
+        QCOMPARE(r.sink.resubmissions, 0);                 // no piece fetched over HTTPS twice
+        QVERIFY(r.sink.saved.empty());                     // every hidden piece was given back
+        for (const lt::download_priority_t priority : r.sink.handle.get_piece_priorities())
+            QVERIFY(priority == lt::default_priority);     // exactly the priority it had before
     }
 
 private slots:
@@ -593,6 +745,7 @@ private slots:
         QVERIFY2(p2pBytes <= (missingBytes + PIECE), qPrintable(u"p2p=%1 missing=%2"_s.arg(p2pBytes).arg(missingBytes)));
         QCOMPARE(r.coord->status().httpVerifiedPieces, fromProvider);
         QCOMPARE(r.coord->ownership().collisions(), 0);
+        QCOMPARE(r.sink.exclusionCalls, 0);   // serialized mode never touches piece priorities
     }
 
     void partialProviderCoverageDebridOnlyStopsWithoutSwarm()
@@ -671,6 +824,272 @@ private slots:
         QVERIFY2(p2pBytes <= (missingBytes + PIECE), qPrintable(u"p2p=%1 missing=%2"_s.arg(p2pBytes).arg(missingBytes)));
         QVERIFY(r.coord->status().switchCount >= 1);
         QCOMPARE(r.coord->ownership().collisions(), 0);
+        QCOMPARE(r.sink.exclusionCalls, 0);   // serialized mode never touches piece priorities
+    }
+
+    // ------------------------------------------------------------------ combined mode (ADR-011)
+
+    void filePiecePrioritiesMatchLibtorrent_data()
+    {
+        QTest::addColumn<int>("flags");
+        QTest::newRow("v1") << static_cast<int>(static_cast<std::uint32_t>(lt::create_torrent::v1_only));
+        QTest::newRow("hybrid v1+v2 with pads") << 0;
+        QTest::newRow("v2") << static_cast<int>(static_cast<std::uint32_t>(lt::create_torrent::v2_only));
+    }
+
+    void filePiecePrioritiesMatchLibtorrent()
+    {
+        // The priority a hidden piece gets back is computed, not read from libtorrent. It must be
+        // exactly what libtorrent itself derives from the file priorities, boundary pieces included.
+        QFETCH(int, flags);
+        Rig r;
+        build(r, lt::create_flags_t(static_cast<std::uint32_t>(flags)), fastConfig());
+        const QList<TorrentFileEntry> files = nativeFileEntries(*r.sink.info);
+        const QList<QList<lt::download_priority_t>> patterns
+        {
+            {lt::dont_download, lt::top_priority, lt::low_priority},
+            {lt::low_priority, lt::dont_download, lt::top_priority},
+            {lt::top_priority, lt::download_priority_t {3}, lt::dont_download}
+        };
+        for (const QList<lt::download_priority_t> &pattern : patterns)
+        {
+            std::vector<lt::download_priority_t> native;
+            qsizetype next = 0;
+            for (const TorrentFileEntry &file : files)
+                native.push_back(file.isPad ? lt::default_priority : pattern.value(next++, lt::default_priority));
+            r.sink.handle.prioritize_files(native);
+            const std::vector<lt::download_priority_t> expected = filePiecePriorities(*r.sink.info, native);
+            QTRY_VERIFY_WITH_TIMEOUT(r.sink.handle.get_piece_priorities() == expected, 5000);
+        }
+    }
+
+    void combinedDownloadsFromBothWithoutCollisions_data()
+    {
+        QTest::addColumn<int>("flags");
+        QTest::newRow("v1") << static_cast<int>(static_cast<std::uint32_t>(lt::create_torrent::v1_only));
+        QTest::newRow("hybrid v1+v2 with pads") << 0;
+    }
+
+    void combinedDownloadsFromBothWithoutCollisions()
+    {
+        // Provider and one seed, equally throttled, on the same torrent at once.
+        QFETCH(int, flags);
+        Rig r;
+        build(r, lt::create_flags_t(static_cast<std::uint32_t>(flags)), combinedConfig(), 20);
+        r.bucket.setRate(512 * 1024, 64 * 1024);
+        r.coord->start(TransportPolicy::DebridPreferred, true);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::CombinedActive, 10000);
+        QVERIFY(!r.coord->wantsTransportHold());
+        QCOMPARE(r.coord->status().activeTransport, ActiveTransport::Combined);
+        startSeed(r, 512 * 1024);
+
+        QTRY_VERIFY_WITH_TIMEOUT(r.finished, 60000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::Completed, 5000);
+        verifyCombinedRun(r);
+
+        const int n = r.sink.info->num_pieces();
+        const HybridStatus st = r.coord->status();
+        const int fromProvider = st.httpVerifiedPieces;
+        qInfo("pieces: %d, provider: %d, peers: %d, yielded to peers: %d, tail: %s", n, fromProvider, n - fromProvider
+                , st.piecesYieldedToPeers, qPrintable(r.reasons.contains(Reason::TailToPeers) ? wireName(Reason::TailToPeers)
+                    : r.reasons.contains(Reason::TailToProvider) ? wireName(Reason::TailToProvider) : u"none"_s));
+        QVERIFY2(fromProvider >= (n / 5), qPrintable(describe(r)));          // both sources
+        QVERIFY2((n - fromProvider) >= (n / 5), qPrintable(describe(r)));    // did real work
+        QVERIFY(!r.sink.everExcluded.empty());
+        // The last pieces went to one source, unless peers already held all of them (no hand-over needed).
+        QVERIFY(!(r.reasons.contains(Reason::TailToProvider) && r.reasons.contains(Reason::TailToPeers)));
+
+        // Nothing fetched twice: peers delivered only what the provider did not, the provider only
+        // whole pieces it submitted once.
+        const qint64 p2pBytes = r.sink.handle.status({}).total_payload_download;
+        QVERIFY2(p2pBytes <= (piecesBytes(r, n - fromProvider) + (4 * PIECE))
+                , qPrintable(u"p2p=%1 peers' pieces=%2"_s.arg(p2pBytes).arg(piecesBytes(r, n - fromProvider))));
+        QVERIFY(st.httpBytesSubmitted <= piecesBytes(r, fromProvider));
+    }
+
+    void combinedTailGoesToFasterSource_data()
+    {
+        QTest::addColumn<int>("httpRate");
+        QTest::addColumn<int>("seedRate");
+        QTest::addColumn<Reason>("expected");
+        QTest::newRow("provider faster") << (2048 * 1024) << (96 * 1024) << Reason::TailToProvider;
+        QTest::newRow("peers faster") << (96 * 1024) << (2048 * 1024) << Reason::TailToPeers;
+    }
+
+    void combinedTailGoesToFasterSource()
+    {
+        // The last pieces go to one source, chosen by measured rate; neither ends "finished" early.
+        QFETCH(int, httpRate);
+        QFETCH(int, seedRate);
+        QFETCH(Reason, expected);
+        Rig r;
+        build(r, lt::create_torrent::v1_only, combinedConfig(), 20);
+        r.bucket.setRate(httpRate, 64 * 1024);
+        r.coord->start(TransportPolicy::DebridPreferred, true);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::CombinedActive, 10000);
+        startSeed(r, seedRate);
+
+        QTRY_VERIFY_WITH_TIMEOUT(r.finished, 60000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::Completed, 5000);
+        verifyCombinedRun(r);
+        const int n = r.sink.info->num_pieces();
+        const int fromProvider = r.coord->status().httpVerifiedPieces;
+        if (expected == Reason::TailToProvider)
+        {
+            QVERIFY2(r.reasons.contains(Reason::TailToProvider), qPrintable(describe(r)));
+            QVERIFY2(!r.reasons.contains(Reason::TailToPeers), qPrintable(describe(r)));
+            QVERIFY2(fromProvider > (n / 2), qPrintable(describe(r)));
+        }
+        else
+        {
+            // Much faster peers may already hold every remaining piece before the threshold is
+            // reached; then there is nothing to hand over and the provider just stops getting work.
+            QVERIFY2(!r.reasons.contains(Reason::TailToProvider), qPrintable(describe(r)));
+            QVERIFY2(fromProvider < (n / 5), qPrintable(describe(r)));
+        }
+    }
+
+    void combinedProviderOutageLeavesRestToPeers()
+    {
+        // The provider fails mid-download: peers, already running, take every missing piece and
+        // fetch nothing that is already verified.
+        Rig r;
+        build(r, lt::create_torrent::v1_only, combinedConfig(), 20);
+        r.bucket.setRate(512 * 1024, 64 * 1024);
+        r.coord->start(TransportPolicy::DebridPreferred, true);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::CombinedActive, 10000);
+        startSeed(r, 256 * 1024);
+
+        const int n = r.sink.info->num_pieces();
+        QTRY_VERIFY_WITH_TIMEOUT(r.coord->status().httpVerifiedPieces >= (n / 5), 30000);
+        r.cdn.mode = Cdn::Mode::Unavailable;
+        r.provider.available = false;
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::P2PActive, 15000);
+        QVERIFY(!r.coord->wantsTransportHold());
+        r.seed->get_torrents().front().set_upload_limit(0);   // let the swarm finish quickly
+
+        QTRY_VERIFY_WITH_TIMEOUT(r.finished, 60000);
+        verifyCombinedRun(r);
+        const int fromProvider = r.coord->status().httpVerifiedPieces;
+        const qint64 p2pBytes = r.sink.handle.status({}).total_payload_download;
+        QVERIFY2(p2pBytes <= (piecesBytes(r, n - fromProvider) + (4 * PIECE))
+                , qPrintable(u"p2p=%1 peers' pieces=%2"_s.arg(p2pBytes).arg(piecesBytes(r, n - fromProvider))));
+    }
+
+    void combinedPeersStallProviderFinishes()
+    {
+        // The only seed disappears mid-download (leaving partial pieces): the provider finishes,
+        // completing those pieces without discarding the blocks peers delivered.
+        Rig r;
+        build(r, lt::create_torrent::v1_only, combinedConfig(), 20);
+        r.bucket.setRate(384 * 1024, 64 * 1024);
+        r.coord->start(TransportPolicy::DebridPreferred, true);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::CombinedActive, 10000);
+        startSeed(r, 384 * 1024);
+
+        const int n = r.sink.info->num_pieces();
+        QTRY_VERIFY_WITH_TIMEOUT((r.sink.havePieces().count(true) - r.coord->status().httpVerifiedPieces) >= (n / 5), 30000);
+        r.seed.reset();   // peers gone
+
+        QTRY_VERIFY_WITH_TIMEOUT(r.finished, 60000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::Completed, 5000);
+        verifyCombinedRun(r);
+        QVERIFY(r.reasons.contains(Reason::TailToProvider));
+        QVERIFY(!r.reasons.contains(Reason::TailToPeers));
+    }
+
+    void combinedSettingNeverReachesSwarmWithoutPermission_data()
+    {
+        QTest::addColumn<TransportPolicy>("policy");
+        QTest::addColumn<bool>("consent");
+        QTest::newRow("debrid only") << TransportPolicy::DebridOnly << true /* must be ignored */;
+        QTest::newRow("preferred without consent") << TransportPolicy::DebridPreferred << false;
+    }
+
+    void combinedSettingNeverReachesSwarmWithoutPermission()
+    {
+        // Combined mode switched on globally changes nothing for torrents that may not use peers.
+        QFETCH(TransportPolicy, policy);
+        QFETCH(bool, consent);
+        Rig r;
+        build(r, lt::create_torrent::v1_only, combinedConfig());
+        r.coord->start(policy, consent);
+        QVERIFY(!r.coord->isCombined());
+        QVERIFY(r.coord->wantsTransportHold());
+
+        QTRY_VERIFY_WITH_TIMEOUT(r.finished, 20000);
+        QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::Completed, 5000);
+        QVERIFY(outputMatches(r));
+        QVERIFY(!r.states.contains(TransportState::CombinedActive));
+        QVERIFY(r.coord->wantsTransportHold());   // and no seeding afterwards either
+        QCOMPARE(r.sink.exclusionCalls, 0);
+        QCOMPARE(r.sink.releases, 0);
+        QCOMPARE(r.tracker.connections, 0);   // zero swarm contact
+        QCOMPARE(r.peer.connections, 0);
+    }
+
+    void combinedThroughputBeatsEitherSource()
+    {
+        // Measurement for ADR-011: HTTPS throttled below what the "line" can take, one seed
+        // throttled to the same rate. Combined mode should approach the sum of both.
+        constexpr int rate = 768 * 1024;
+        // QBF_MEASURE_SCALE=60 gives a ~17 MiB fixture for steadier numbers (not run by default).
+        const int scale = std::max(20, qEnvironmentVariableIntValue("QBF_MEASURE_SCALE"));
+
+        const auto finishSeconds = [](Rig &r, const QElapsedTimer &clock)
+        {
+            while (!r.finished && (clock.elapsed() < 90'000))
+                QTest::qWait(10);
+            return clock.elapsed() / 1000.0;
+        };
+
+        double httpsOnly = 0;
+        {
+            Rig r;
+            build(r, lt::create_torrent::v1_only, fastConfig(), scale);
+            r.bucket.setRate(rate, 64 * 1024);
+            QElapsedTimer clock;
+            clock.start();
+            r.coord->start(TransportPolicy::DebridOnly, false);
+            httpsOnly = finishSeconds(r, clock);
+            QVERIFY(r.finished);
+            QVERIFY(outputMatches(r));
+        }
+
+        double peersOnly = 0;
+        qint64 totalBytes = 0;
+        {
+            Rig r;
+            build(r, lt::create_torrent::v1_only, fastConfig(), scale);
+            totalBytes = r.sink.info->total_size();
+            QElapsedTimer clock;
+            clock.start();
+            r.sink.handle.resume();   // plain BitTorrent, no coordinator involved
+            startSeed(r, rate);
+            peersOnly = finishSeconds(r, clock);
+            QVERIFY(r.finished);
+            QVERIFY(outputMatches(r));
+        }
+
+        double combined = 0;
+        {
+            Rig r;
+            build(r, lt::create_torrent::v1_only, combinedConfig(), scale);
+            r.bucket.setRate(rate, 64 * 1024);
+            QElapsedTimer clock;
+            clock.start();
+            r.coord->start(TransportPolicy::DebridPreferred, true);
+            QTRY_COMPARE_WITH_TIMEOUT(r.coord->state(), TransportState::CombinedActive, 10000);
+            startSeed(r, rate);
+            combined = finishSeconds(r, clock);
+            QVERIFY(r.finished);
+            verifyCombinedRun(r);
+        }
+
+        const auto mib = [totalBytes](const double seconds) { return (totalBytes / (1024.0 * 1024.0)) / seconds; };
+        qInfo("%.1f MiB, each source limited to %d KiB/s: HTTPS only %.2f s (%.2f MiB/s), peers only %.2f s (%.2f MiB/s), combined %.2f s (%.2f MiB/s)"
+                , totalBytes / (1024.0 * 1024.0), rate / 1024, httpsOnly, mib(httpsOnly), peersOnly, mib(peersOnly), combined, mib(combined));
+        QVERIFY2(combined < (0.8 * std::min(httpsOnly, peersOnly)), "combined mode is not faster than either source alone");
     }
 };
 
