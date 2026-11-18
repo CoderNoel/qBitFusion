@@ -56,6 +56,29 @@ layout and resume data, so the two kinds of source can be combined in one downlo
 
 ![Add-torrent dialog](qbitfusion/docs/screenshots/add-torrent.png)
 
+### Direct downloads
+
+- Plain file links, not only torrents. Paste them in **Add > Download from URL**, press Ctrl+V in the
+  main window, or drop them on the list. Each http(s) link is requested once and judged by the server's
+  answer (content type and first bytes), not by its extension: a torrent opens in the add-torrent dialog,
+  a file is downloaded on the **Links** page, and a web page is refused with a reason.
+- Meant for stream links copied from Stremio with a debrid add-on (for example Torrentio, whose links
+  redirect to the debrid service's download servers) and for download links from a debrid website.
+- Downloads resume after a pause, a dropped connection or a restart, using HTTP range requests. If the
+  file on the server changed (size or ETag), it is downloaded again from the start instead of being
+  mixed. Failed connections are retried with a growing delay; an expired link asks for a new one
+  (**Replace link**) and continues from the bytes already saved.
+- Redirects are checked one by one: a redirect from https to plain http, or from the internet into your
+  local network, is refused.
+- Uses the proxy set for general-purpose traffic, the cookies from qBittorrent's cookie manager, and the
+  global download speed limit.
+- Links are treated as secrets, since add-on links can contain an API key and debrid links are signed.
+  The list, the log and error messages show only the host. Until a file is complete its link is kept in
+  the Windows Credential Manager so the download can resume after a restart; it is deleted when the file
+  is complete or removed. Settings files and the saved list never contain links.
+
+![Links page](qbitfusion/docs/screenshots/links.png)
+
 ### Interface
 
 - A header (pages, search, Add, quick toggles, one menu holding all the former menus) replaces the menu
@@ -82,10 +105,12 @@ How both work: [qbitfusion/docs/RELEASING.md](qbitfusion/docs/RELEASING.md) and
 
 What has been checked, and how:
 
-- **Automated tests:** 32 suites pass on Windows. Ten of them cover the hybrid code, including end-to-end
+- **Automated tests:** 34 suites pass on Windows. Ten of them cover the hybrid code, including end-to-end
   runs against a real libtorrent session and a local test server: HTTPS-only download of v1, v2 and hybrid
   torrents, rejection of corrupt data, an outage in mid-download, the consent rule, and a provider that
-  has only part of a torrent.
+  has only part of a torrent. One covers direct downloads against a local test server: link and content
+  classification, file naming, redirect rules, redaction, resume (after a pause, a dropped connection and
+  a restart), changed files, expired links and the speed limit.
 - **Live use:** one Real-Debrid account and one large torrent, which completed over HTTPS at about
   10 MiB/s. That is the whole of the real-world evidence so far.
 
@@ -101,6 +126,7 @@ What is missing or unverified:
 | Speed | HTTPS downloads use four parallel requests per torrent by default. Whether that holds back fast lines has not been measured. |
 | Statistics | "Downloaded" and session totals count only bytes from peers. Progress, speed and ETA are correct. |
 | Web UI / Web API | No way to see or set the download source. |
+| Direct downloads | Tested against a local test server and public file servers, not yet with a real Stremio add-on or debrid link. One connection per file: on one test, four connections to a distant server were about 1.5 times faster than one, so this may hold back fast lines. At most three run at once, which cannot be changed yet. There is no checksum, only size and ETag, so a power cut during a download can leave bad bytes at the end of the partial file. Not available from the Web UI, RSS or watched folders. If an add-on redirects to a "still caching" placeholder video, that video is what gets downloaded. Links longer than 2,560 characters do not fit in the Credential Manager and have to be pasted again after a restart. The add dialog always appears for file links, even when the add-torrent dialog is switched off. The status bar and the speed graph count torrent traffic only. |
 | Interface | Reviewed at 150% scaling in the dark scheme. The light scheme and a few dialogs were changed but not re-checked. Labels inherited from qBittorrent still use Title Case, and some Options rows are unevenly aligned. |
 | Translations | New text is English only. |
 | Distribution | A portable zip for Windows that updates itself. No installer and no code signing, so Windows SmartScreen warns on first start. |
@@ -126,7 +152,11 @@ These are self-contained enough for a pull request. Roughly in order of size:
   needed; if one is, that is worth an issue first.
 - **Linux and macOS** — get it to build, then add a credential store (Secret Service, Keychain) in
   `src/base/hybrid/securestore.cpp`. The CI workflows for both exist but are set to manual.
-- **Web API and Web UI** — expose the source and its status.
+- **Web API and Web UI** — expose the source and its status, and the direct downloads.
+- **Parallel connections for direct downloads** — split a file into ranges fetched at the same time
+  (`src/base/directdownload/`), with the segment state saved for resume. Measure first, and respect the
+  provider's connection limits.
+- **Direct download settings** — how many run at once, and whether the add dialog is shown.
 - **Packet-level privacy check** — a harness that adds a "Debrid only" torrent and proves that nothing
   leaves for trackers, DHT or peers.
 - **Installer and code signing** — an installer, and an Authenticode certificate so that Windows trusts
@@ -172,8 +202,9 @@ sits in a few places:
 | Path | Contents |
 | --- | --- |
 | `src/base/hybrid/`, `src/gui/hybrid/` | The hybrid transport and its interface. |
+| `src/base/directdownload/`, `src/gui/directdownload/` | Direct downloads of plain file links and the Links page. |
 | `src/gui/modern/` | The modern look: palettes, stylesheet, icons, shell widgets. |
-| `test/testhybrid*.cpp` | Tests for the hybrid code. |
+| `test/testhybrid*.cpp`, `test/testdirectdownload.cpp` | Tests for the hybrid code and for direct downloads. |
 | `src/base/selfupdate/` | The updater: signed update description, download, install. |
 | `qbitfusion/docs/` | This project's documentation: status, decisions, specification, releases, upstream guide. |
 | `qbitfusion/scripts/` | Windows scripts: toolchain, build, install, package, test instance. |

@@ -70,6 +70,8 @@
 #include "base/bittorrent/addtorrentparams.h"
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/session.h"
+#include "base/directdownload/directdownloadmanager.h"
+#include "base/directdownload/linkclassifier.h"
 #include "base/hybrid/hybridmanager.h"
 #include "base/bittorrent/torrent.h"
 #include "base/exceptions.h"
@@ -883,8 +885,17 @@ void Application::processParams(const QBtCommandLineParameters &params)
     AddTorrentOption addTorrentOption = AddTorrentOption::Default;
     if (params.skipDialog.has_value())
         addTorrentOption = params.skipDialog.value() ? AddTorrentOption::SkipDialog : AddTorrentOption::ShowDialog;
+    // qBitFusion: an http(s) link may serve a file instead of a torrent; the window checks it once.
+    QStringList links;
     for (const QString &torrentSource : params.torrentSources)
-        m_addTorrentManager->addTorrent(torrentSource, params.addTorrentParams, addTorrentOption);
+    {
+        if (m_window && (DirectDownload::classifyInput(torrentSource) == DirectDownload::InputKind::WebUrl))
+            links.append(torrentSource);
+        else
+            m_addTorrentManager->addTorrent(torrentSource, params.addTorrentParams, addTorrentOption);
+    }
+    if (!links.isEmpty())
+        m_window->addLinks(links, params.addTorrentParams, addTorrentOption);
 #else
     for (const QString &torrentSource : params.torrentSources)
         m_addTorrentManager->addTorrent(torrentSource, params.addTorrentParams);
@@ -914,6 +925,7 @@ int Application::exec()
     Hybrid::HybridManager::initInstance();
     BitTorrent::Session::initInstance();
     Hybrid::HybridManager::instance()->attachSession();
+    DirectDownload::Manager::initInstance();
 
 #ifndef DISABLE_GUI
     UIThemeManager::initInstance();
@@ -1496,6 +1508,7 @@ void Application::cleanup()
 #ifdef DISABLE_GUI
     delete m_addTorrentManager;
 #endif
+    DirectDownload::Manager::freeInstance();
     Hybrid::HybridManager::freeInstance();
     BitTorrent::Session::freeInstance();
     Net::ReverseResolution::freeInstance();

@@ -32,9 +32,11 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include "base/bittorrent/addtorrentparams.h"
 #include "base/bittorrent/torrent.h"
 #include "base/logger.h"
 #include "base/settingvalue.h"
+#include "guiaddtorrentmanager.h"
 #include "guiapplicationcomponent.h"
 #include "windowstate.h"
 
@@ -48,6 +50,7 @@ class QTabWidget;
 class QTimer;
 
 class AboutDialog;
+class DirectDownloadWidget;
 class DownloadFromURLDialog;
 class ExecutionLogWidget;
 class LineEdit;
@@ -120,6 +123,11 @@ public:
 
     void activate();
     void cleanup();
+
+    // qBitFusion: each http(s) link is checked once and becomes a torrent or a direct download;
+    // anything else (magnets, hashes, files, ".torrent" links) goes to the torrent add flow unchanged.
+    void addLinks(const QStringList &links, const BitTorrent::AddTorrentParams &params = {}
+            , AddTorrentOption option = AddTorrentOption::Default);
 
 private slots:
     void showFilterContextMenu();
@@ -215,6 +223,10 @@ private:
     // qBitFusion modern shell: header with page switcher, search and primary actions; action bar over the list.
     void setupModernShell(QSplitter *transferSplitter);
     void refreshPageSwitcher();
+    // qBitFusion direct downloads: the Links page, and routing of pasted links (torrent or file).
+    void ensureLinksTab();
+    void updateLinksTabText();
+    void displayLinksTab();
     void updateSelectionSummary();
     void createTorrentTriggered(const Path &path);
     void showStatusBar(bool show);
@@ -272,8 +284,10 @@ private:
     QPointer<SearchWidget> m_searchWidget;
     QPointer<RSSWidget> m_rssWidget;
     QPointer<ExecutionLogWidget> m_executionLog;
+    QPointer<DirectDownloadWidget> m_linksWidget;
     // Modern shell (null with the classic look)
     Modern::NavButton *m_navTransfers = nullptr;
+    Modern::NavButton *m_navLinks = nullptr;
     Modern::NavButton *m_navSearch = nullptr;
     Modern::NavButton *m_navRSS = nullptr;
     Modern::NavButton *m_navLog = nullptr;

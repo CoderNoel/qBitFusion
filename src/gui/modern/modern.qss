@@ -226,6 +226,7 @@ PropertiesWidget {
 }
 
 TransferListWidget,
+QTreeView#qbfLinkList,
 PropertiesWidget QTreeView,
 PropertiesWidget QListView,
 PropertiesWidget QScrollArea,
@@ -242,6 +243,8 @@ PropertiesWidget QScrollArea > QWidget > QWidget {
 
 TransferListWidget QHeaderView,
 TransferListWidget QHeaderView::section,
+QTreeView#qbfLinkList QHeaderView,
+QTreeView#qbfLinkList QHeaderView::section,
 PropertiesWidget QHeaderView,
 PropertiesWidget QHeaderView::section {
     background: transparent;

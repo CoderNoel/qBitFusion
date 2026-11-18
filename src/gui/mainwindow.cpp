@@ -91,6 +91,10 @@
 #include "hidabletabwidget.h"
 #include "interfaces/iguiapplication.h"
 #include "lineedit.h"
+#include "base/directdownload/directdownloadmanager.h"
+#include "base/directdownload/linkclassifier.h"
+#include "directdownload/adddirectdownloaddialog.h"
+#include "directdownload/directdownloadwidget.h"
 #include "modern/modernappearance.h"
 #include "modern/modernwidgets.h"
 #include "optionsdialog.h"
@@ -328,6 +332,24 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
         UIThemeManager::instance()->getIcon(u"folder-remote"_s),
 #endif
         tr("Transfers"));
+
+    // qBitFusion: direct downloads (plain file links) have their own page. With the classic look the
+    // page appears only once there is a direct download, so the classic window otherwise stays as it was.
+    if (auto *directDownloads = DirectDownload::Manager::instance())
+    {
+        if (ModernAppearance::isActive() || !directDownloads->ids().isEmpty())
+            ensureLinksTab();
+        connect(directDownloads, &DirectDownload::Manager::itemAdded, this, &MainWindow::ensureLinksTab);
+        connect(directDownloads, &DirectDownload::Manager::itemFinished, this, [this, directDownloads](const QString &id)
+        {
+            if (const auto info = directDownloads->info(id))
+            {
+                this->app()->desktopIntegration()->showNotification(tr("Download completed")
+                        , tr("'%1' has finished downloading.", "e.g: xxx.avi has finished downloading.").arg(info->name));
+            }
+        });
+    }
+
     // Filter types
     const QList<TransferListModel::Column> filterTypes = {
         TransferListModel::Column::TR_NAME
@@ -658,13 +680,15 @@ void MainWindow::setupModernShell(QSplitter *transferSplitter)
     pageSwitcherLayout->setContentsMargins(0, 0, 0, 0);
     pageSwitcherLayout->setSpacing(2);
     m_navTransfers = new Modern::NavButton(theme->getIcon(u"qbf-transfers"_s), tr("Transfers"), pageSwitcher);
+    m_navLinks = new Modern::NavButton(theme->getIcon(u"insert-link"_s), tr("Links"), pageSwitcher);
+    m_navLinks->setToolTip(tr("Direct downloads: plain file links that are not torrents"));
     m_navSearch = new Modern::NavButton(theme->getIcon(u"qbf-search-page"_s), tr("Search"), pageSwitcher);
     m_navRSS = new Modern::NavButton(theme->getIcon(u"qbf-rss"_s), tr("RSS"), pageSwitcher);
     m_navLog = new Modern::NavButton(theme->getIcon(u"qbf-log"_s), tr("Log"), pageSwitcher);
     m_navSearch->setToolTip(tr("Search for torrents with search plugins"));
     m_navRSS->setToolTip(tr("Follow RSS feeds and download new items automatically"));
     m_navLog->setToolTip(tr("Execution log"));
-    for (Modern::NavButton *button : {m_navTransfers, m_navSearch, m_navRSS, m_navLog})
+    for (Modern::NavButton *button : {m_navTransfers, m_navLinks, m_navSearch, m_navRSS, m_navLog})
         pageSwitcherLayout->addWidget(button);
     header->addWidget(pageSwitcher);
 
@@ -672,6 +696,11 @@ void MainWindow::setupModernShell(QSplitter *transferSplitter)
     connect(m_navTransfers, &QAbstractButton::clicked, this, [this]
     {
         displayTransferTab();
+        refreshPageSwitcher();
+    });
+    connect(m_navLinks, &QAbstractButton::clicked, this, [this]
+    {
+        displayLinksTab();
         refreshPageSwitcher();
     });
     connect(m_navSearch, &QAbstractButton::clicked, this, [this]
@@ -714,7 +743,7 @@ void MainWindow::setupModernShell(QSplitter *transferSplitter)
     addButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     addButton->setPopupMode(QToolButton::MenuButtonPopup);
     addButton->setCursor(Qt::PointingHandCursor);
-    addButton->setToolTip(tr("Add a torrent file. Use the arrow for a magnet link or to create a torrent."));
+    addButton->setToolTip(tr("Add a torrent file. Use the arrow for a magnet link, a file link or to create a torrent."));
     auto *addMenu = new QMenu(addButton);
     addMenu->addAction(m_ui->actionOpen);
     addMenu->addAction(m_ui->actionDownloadFromURL);
@@ -866,10 +895,80 @@ void MainWindow::refreshPageSwitcher()
 
     m_navTransfers->setChecked(current == m_splitter);
     m_navTransfers->setBadge(badgeOf(m_splitter));
+    m_navLinks->setChecked(m_linksWidget && (current == m_linksWidget.data()));
+    m_navLinks->setBadge(badgeOf(m_linksWidget));
     m_navSearch->setChecked(m_searchWidget && (current == m_searchWidget.data()));
     m_navRSS->setChecked(m_rssWidget && (current == m_rssWidget.data()));
     m_navRSS->setBadge(badgeOf(m_rssWidget));
     m_navLog->setChecked(m_executionLog && (current == m_executionLog.data()));
+}
+
+void MainWindow::ensureLinksTab()
+{
+    auto *manager = DirectDownload::Manager::instance();
+    if (m_linksWidget || !manager)
+        return;
+
+    m_linksWidget = new DirectDownloadWidget(manager, m_ui->actionDownloadFromURL, m_tabs);
+    [[maybe_unused]] const int index = m_tabs->insertTab(1, m_linksWidget, tr("Links (%1)").arg(m_linksWidget->count()));
+#ifndef Q_OS_MACOS
+    m_tabs->setTabIcon(index, UIThemeManager::instance()->getIcon(u"insert-link"_s));
+#endif
+    connect(m_linksWidget.data(), &DirectDownloadWidget::countChanged, this, &MainWindow::updateLinksTabText);
+    static_cast<HidableTabWidget *>(m_tabs.data())->notifyTabsChanged();
+}
+
+void MainWindow::updateLinksTabText()
+{
+    if (!m_linksWidget)
+        return;
+    m_tabs->setTabText(m_tabs->indexOf(m_linksWidget), tr("Links (%1)").arg(m_linksWidget->count()));
+    static_cast<HidableTabWidget *>(m_tabs.data())->notifyTabsChanged();
+}
+
+void MainWindow::displayLinksTab()
+{
+    ensureLinksTab();
+    if (m_linksWidget)
+        m_tabs->setCurrentWidget(m_linksWidget);
+}
+
+void MainWindow::addLinks(const QStringList &links, const BitTorrent::AddTorrentParams &params, const AddTorrentOption option)
+{
+    auto *directDownloads = DirectDownload::Manager::instance();
+    QList<QUrl> webLinks;
+    for (const QString &link : links)
+    {
+        // Only the server's answer tells a torrent from a file behind an http(s) link without
+        // ".torrent". Everything else (magnets, hashes, files, .torrent links) goes the upstream way.
+        if (directDownloads && (DirectDownload::classifyInput(link) == DirectDownload::InputKind::WebUrl))
+            webLinks.append(QUrl(link.trimmed()));
+        else
+            app()->addTorrentManager()->addTorrent(link, params, option);
+    }
+    if (webLinks.isEmpty())
+        return;
+
+    auto *dialog = new AddDirectDownloadDialog(directDownloads, webLinks, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &AddDirectDownloadDialog::torrentDataFound, this, [this, params, option](const QString &source, const QByteArray &data)
+    {
+        app()->addTorrentManager()->addTorrentData(source, data, params, option);
+    });
+    connect(dialog, &AddDirectDownloadDialog::magnetFound, this, [this, params, option](const QString &magnetUri)
+    {
+        app()->addTorrentManager()->addTorrent(magnetUri, params, option);
+    });
+    connect(dialog, &AddDirectDownloadDialog::torrentLinkFound, this, [this, params, option](const QString &link)
+    {
+        app()->addTorrentManager()->addTorrent(link, params, option);
+    });
+    connect(dialog, &QDialog::accepted, this, [this]
+    {
+        displayLinksTab();
+        refreshPageSwitcher();
+    });
+    dialog->show();
 }
 
 void MainWindow::updateSelectionSummary()
@@ -1533,14 +1632,16 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         if (mimeData->hasText())
         {
             const QStringList lines = mimeData->text().split(u'\n', Qt::SkipEmptyParts);
+            QStringList links;
             for (QString line : lines)
             {
                 line = line.trimmed();
                 if (!Utils::Misc::isTorrentLink(line))
                     continue;
 
-                app()->addTorrentManager()->addTorrent(line);
+                links.append(line);
             }
+            addLinks(links);
 
             return;
         }
@@ -1883,8 +1984,7 @@ void MainWindow::reloadTorrentStats(const QList<BitTorrent::Torrent *> &torrents
 
 void MainWindow::downloadFromURLList(const QStringList &urlList)
 {
-    for (const QString &url : urlList)
-        app()->addTorrentManager()->addTorrent(url);
+    addLinks(urlList);
 }
 
 void MainWindow::populateDesktopIntegrationMenu()

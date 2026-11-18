@@ -55,6 +55,9 @@ add_library(qbt_base STATIC
     concepts/explicitlyconvertibleto.h
     concepts/stringable.h
     digest32.h
+    directdownload/directdownloadmanager.h
+    directdownload/httptransfer.h
+    directdownload/linkclassifier.h
     exceptions.h
     freediskspacechecker.h
     global.h
@@ -196,6 +199,9 @@ add_library(qbt_base STATIC
     bittorrent/tracker.cpp
     bittorrent/trackerentry.cpp
     bittorrent/trackerentrystatus.cpp
+    directdownload/directdownloadmanager.cpp
+    directdownload/httptransfer.cpp
+    directdownload/linkclassifier.cpp
     exceptions.cpp
     freediskspacechecker.cpp
     hybrid/filebinding.cpp

@@ -59,9 +59,10 @@ that the upstream release is included, so that the next one merges cleanly.
 qBitFusion adds most of its code in new directories, which never conflict:
 
 - `src/base/hybrid/`, `src/gui/hybrid/` — the hybrid transport and its GUI
+- `src/base/directdownload/`, `src/gui/directdownload/` — direct downloads and the Links page
 - `src/gui/modern/` — the modern look, icons and shell widgets
 - `qbitfusion/` — documentation, scripts, the spike and the branding check
-- `test/testhybrid*.cpp`
+- `test/testhybrid*.cpp`, `test/testdirectdownload.cpp`
 
 It also edits about 60 upstream files. The ones that carry the largest changes, and so the highest chance
 of a conflict:
@@ -69,7 +70,8 @@ of a conflict:
 | File | Why it was changed | How to resolve a conflict |
 | --- | --- | --- |
 | `src/gui/addnewtorrentdialog.ui`, `.cpp` | The dialog layout was rebuilt (same object names). | Keep this fork's layout, then add any widget upstream introduced by hand. |
-| `src/gui/mainwindow.cpp` | Header and action bar replace the menu bar and toolbar. | Keep both sides; new upstream menu actions appear in the overflow menu automatically. |
+| `src/gui/mainwindow.cpp` | Header and action bar replace the menu bar and toolbar. The Links page; pasted http(s) links go through `addLinks()`. | Keep both sides; new upstream menu actions appear in the overflow menu automatically. Keep upstream's torrent add calls for anything that is not an http(s) link without `.torrent`. |
+| `src/app/application.cpp`, `src/gui/guiaddtorrentmanager.*`, `src/gui/transferlistwidget.cpp` (drop) | Start and stop of the direct download manager; command-line and dropped http(s) links go to `MainWindow::addLinks()`; `addTorrentData()` for a `.torrent` the link check already fetched. | Keep both sides. |
 | `src/base/bittorrent/sessionimpl.cpp`, `torrentimpl.cpp` | Small hooks: hold at add/load, piece alerts, recheck, HTTPS rate. | Re-apply the hooks around upstream's new code. They are marked with `qBitFusion:` comments. |
 | `src/gui/transferlistwidget.cpp`, `transferlistmodel.cpp` | Source column and its menu. | Keep both sides. |
 | `src/gui/optionsdialog.cpp`, `.ui` | Hybrid page, accent picker, page list. | Keep both sides. |

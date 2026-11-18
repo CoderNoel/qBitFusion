@@ -3,7 +3,7 @@
 What is built, how it was verified, and what is still open. The [README](../../README.md) has the short
 version; design decisions and raw observations are in [DECISIONS.md](DECISIONS.md).
 
-Last reviewed: 2026-11-11.
+Last reviewed: 2026-11-18.
 
 ## Baseline
 
@@ -21,6 +21,7 @@ Last reviewed: 2026-11-11.
 | Hooks in qBittorrent's core | `src/base/bittorrent/` | `hybridhooks.h` and `hybridtorrentsink.*` (new). `session.h`, `sessionimpl.*`: hold at add and load, piece alerts, recheck hook. `torrentimpl.*`: transport hold, HTTPS rate, `addExternalPiece`. `app/application.cpp`: start-up and shutdown. |
 | Hybrid GUI | `src/gui/hybrid/` | Options page, source picker, consent prompt, device sign-in dialog, the Source column and its context menu. |
 | Modern look | `src/gui/modern/` | Light and dark palettes with a configurable accent, one stylesheet, a 108-glyph monochrome icon set tinted at paint time, the app mark, and the shell widgets (page switcher, sidebar rows, empty state, accent picker). `mainwindow.*` builds the header and action bar; the menu bar is hidden and its actions stay registered on the window so shortcuts keep working. |
+| Direct downloads | `src/base/directdownload/`, `src/gui/directdownload/` | Link and content classification, file naming, redirect rules (`linkclassifier.*`); the link check and the resumable transfer (`httptransfer.*`); queue, retries, persistence and credential storage (`directdownloadmanager.*`). GUI: the Links page, its model, and the dialog that checks pasted links. `mainwindow.*` and `app/application.cpp` route http(s) links through the check. |
 | Naming | throughout the GUI | The user-visible name is qBitFusion and the executable is `qbitfusion.exe`. Settings and profile folder names are unchanged from qBittorrent. Upstream's update check is disabled, because it would offer stock qBittorrent. |
 | Tooling | `qbitfusion/` | Windows scripts (toolchain, build, install, package, test instance, window capture), the libtorrent feasibility spike, and a branding check. |
 
@@ -34,6 +35,13 @@ These are the points to re-check when merging a new upstream release (see [UPSTR
 - `TransferListModel::TR_SOURCE`: a column appended at the end, so saved header state stays compatible.
 - Settings keys under `Hybrid/`. Per-torrent sidecars in `<profile>/data/hybrid/<id>.hybrid.json`, which
   hold no secrets.
+- Direct downloads: `GUIAddTorrentManager::addTorrentData()` (new, adds a `.torrent` that the link check
+  already downloaded). `MainWindow::downloadFromURLList()`, the main window's paste handler, links dropped on the
+  transfer list (`TransferListWidget::dropEvent()`) and `Application::processParams()` send http(s) links without `.torrent` through `MainWindow::addLinks()`;
+  magnets, hashes, files and `.torrent` links take the upstream path unchanged. `Modern::EmptyState`
+  gained `setTexts()`. The list is saved in `<profile>/data/directdownloads.json` (no links); settings keys
+  `DirectDownload/SavePath`, `DirectDownload/AddDialogSize`, `DirectDownload/ListHeaderState`. Links live
+  in the Credential Manager under `qBitFusion/directdownload/<id>` until the file is complete.
 
 Why new code was needed: `Net::DownloadManager` cannot send `Range`, buffers whole bodies and
 decompresses transparently, so the data path has its own `QNetworkAccessManager` adapter. libtorrent's
@@ -43,7 +51,18 @@ are. No library was added.
 ## How it was verified
 
 **Automated.** `pwsh qbitfusion/scripts/build-windows.ps1` builds with warnings as errors and
-`QT_FORCE_ASSERTS`, and runs 32 test suites (22 from qBittorrent, 10 for the hybrid code). All pass.
+`QT_FORCE_ASSERTS`, and runs 34 test suites (22 from qBittorrent, 10 for the hybrid code, one for the
+self-updater, one for direct downloads). All pass.
+
+- `testdirectdownload` (42 cases) runs against a local HTTP server: input and content classification (a
+  torrent served as `application/octet-stream` without a `.torrent` extension, HTML pages, magnet
+  redirects), Content-Disposition parsing including path traversal, Windows-safe and unique names, the
+  redirect rules, that refusals report only the host, and transfers: whole, resumed with `Range` and
+  `If-Range`, a server that ignores ranges, a changed ETag, a changed size, a dropped connection that keeps
+  its bytes and resumes, an already complete file, a compressed body, and the speed limit. The manager
+  tests cover completion (the link is then deleted from the credential store and the saved list holds no
+  link), unique names, pause and resume, resume after a restart from the credential store, the "link
+  needed" state, retry after a dropped connection, and an expired link.
 
 - Unit suites: range parsing with a 20 000-case fuzz, URL guard, file binding, piece ownership (20 000
   random operations), provider health, the state machine (including a 50 000-event check that
@@ -76,6 +95,21 @@ the same 32 suites; it passes. The Python, WebUI and file-health checks inherite
 macOS workflows are set to manual, because this code has not been built there yet.
 
 ## Privacy and security properties
+
+Direct downloads:
+
+- A link is shown, logged and saved as its host only. Error details carry the scheme and host, the HTTP
+  status and a redacted summary of the server's error page. Qt's own error strings are not used, because
+  they can contain the full URL.
+- Until a file is complete its link is kept in the Credential Manager, then deleted. Without a persistent
+  store (other platforms, or a link longer than 2,560 bytes) the item asks for the link again after a
+  restart.
+- A pasted link may point anywhere over http or https, since the user chose it. Redirects may not go from
+  https to http, nor from a public host into the local network (loopback, private, link-local,
+  single-label and `.local` names). DNS answers are not checked, so a public name that resolves to a
+  private address is not caught.
+
+Hybrid transport:
 
 - A `debrid_only` torrent is held (paused, not auto-managed) from the moment it is created and again on
   restart. The magnet metadata preview in the add dialog only runs when the chosen source allows P2P.
@@ -136,6 +170,27 @@ Distribution:
     profile. The whole path (download, unpack, install at start-up, restart) was tried once on this
     machine against a local test server. The Release and upstream-sync workflows had not run on GitHub yet
     when this was written. A version that installs but then fails to start is not rolled back.
+
+Direct downloads:
+
+17. **No live debrid run.** Tested against the local test server and, in a test instance, against public
+    file servers (download.blender.org, archive.org with its redirects), including pause, quit and
+    restart; both files resumed across the restart matched archive.org's MD5. Not yet with a real Stremio
+    add-on link or a Real-Debrid download link.
+18. **One connection per file.** A rough measurement on 2026-11-18 (while a build was running): a public
+    server in France served about 4 MiB/s on one connection and about 6.3 MiB/s on four. Splitting a file
+    into parallel ranges is open work; it needs the segment state saved for resume and must respect the
+    provider's connection limits.
+19. **No checksum.** Only the size and the ETag are checked. Writes are not flushed to the disk with
+    `fsync`, so after a power cut the end of a partial file may hold zeros; the download then continues
+    after them.
+20. **Fixed limits.** Three downloads at a time, a retry schedule of 5 s to 5 min with six attempts, and
+    the add dialog always shown. None of this is in Options yet. The status bar, the speed graph and the
+    session statistics count torrent traffic only; the Links page shows its own total speed.
+21. **Other add paths.** The Web UI, the Web API, RSS and watched folders still treat every link as a
+    torrent.
+22. **Placeholder videos.** Some add-ons redirect to a short "still caching" video when the debrid service
+    does not have the file yet. That video is downloaded like any other file.
 
 ## Next
 

@@ -153,6 +153,31 @@ bool GUIAddTorrentManager::addTorrent(const QString &source, const BitTorrent::A
     return false;
 }
 
+bool GUIAddTorrentManager::addTorrentData(const QString &source, const QByteArray &data
+        , const BitTorrent::AddTorrentParams &params, const AddTorrentOption option)
+{
+    const auto loadResult = BitTorrent::TorrentDescriptor::load(data);
+    if (!loadResult)
+    {
+        handleAddTorrentFailed(source, loadResult.error());
+        return false;
+    }
+
+    const BitTorrent::TorrentDescriptor &torrentDescr = loadResult.value();
+    if ((option == AddTorrentOption::SkipDialog)
+            || ((option == AddTorrentOption::Default) && !Preferences::instance()->isAddNewTorrentDialogEnabled()))
+    {
+        if (BitTorrent::Torrent *torrent = btSession()->findTorrent(torrentDescr.infoHash()))
+        {
+            handleDuplicateTorrent(source, torrentDescr, torrent);
+            return false;
+        }
+        return addTorrentToSession(source, torrentDescr, params);
+    }
+
+    return processTorrent(source, torrentDescr, params);
+}
+
 void GUIAddTorrentManager::onDownloadFinished(const Net::DownloadResult &result)
 {
     const QString &source = result.url;

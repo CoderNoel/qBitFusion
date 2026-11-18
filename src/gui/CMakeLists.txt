@@ -53,6 +53,9 @@ add_library(qbt_gui STATIC
     cookiesmodel.h
     deletionconfirmationdialog.h
     desktopintegration.h
+    directdownload/adddirectdownloaddialog.h
+    directdownload/directdownloadmodel.h
+    directdownload/directdownloadwidget.h
     downloadfromurldialog.h
     executionlogwidget.h
     filterpatternformat.h
@@ -166,6 +169,9 @@ add_library(qbt_gui STATIC
     cookiesmodel.cpp
     deletionconfirmationdialog.cpp
     desktopintegration.cpp
+    directdownload/adddirectdownloaddialog.cpp
+    directdownload/directdownloadmodel.cpp
+    directdownload/directdownloadwidget.cpp
     downloadfromurldialog.cpp
     executionlogwidget.cpp
     filterpatternformatmenu.cpp

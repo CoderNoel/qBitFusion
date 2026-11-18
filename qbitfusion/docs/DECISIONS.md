@@ -53,6 +53,38 @@ Harness: `qbitfusion/spike/ltspike.cpp`. Fixtures: 3 files (100 000 / 70 001 / 1
 
 **Evidence.** `testhybridstatemachine::providerExhaustedHandsTheRestToPeersOnlyIfPermitted`; `testhybridcoordinator::partialProviderCoverageUsesProviderThenPeers` (real libtorrent session: HTTP verifies exactly the fully covered pieces, peers fetch only the rest, output byte-identical, one source switch, one manifest call, 0 collisions) and `…DebridOnlyStopsWithoutSwarm` (0 tracker/peer connections, 0 hold releases). 32/32 ctest suites.
 
+## ADR-010 | Direct downloads get their own engine and page — ACCEPTED (2026-11-18)
+
+**Trigger.** Plain file links (Stremio stream links through a debrid add-on, debrid download links) failed
+in "Download from URL", because every http(s) link was fetched and parsed as a `.torrent`.
+
+**Decision.**
+
+- A direct download is not a torrent: no pieces, hashes or info-hash. It is kept out of libtorrent and
+  out of the hybrid transport, in `src/base/directdownload/`, with one resumable `GET` per file into
+  `<name>.part`, renamed when complete. `Net::DownloadManager` is not reused for the body for the
+  reasons in INTEGRATION-NOTES.md (no `Range`, whole body in memory, transparent decompression).
+- Pasted http(s) links without `.torrent` are requested once and classified by the answer: bencoded
+  first bytes or `application/x-bittorrent` is a torrent (handed to the add-torrent flow with the bytes
+  already fetched), a redirect to `magnet:` is a magnet, HTML without `attachment` is refused, anything
+  else is a file. Magnets, hashes, files and `.torrent` links keep the upstream path, so torrent behavior
+  is unchanged.
+- The interface is a separate **Links** page, chosen by the user over rows in the Transfers list: that
+  list's model, sidebar filters, details panel and context menu all assume a torrent, and an abstraction
+  over them would touch the upstream files most likely to conflict on every merge.
+- Links are secrets (add-on links can carry an API key, debrid links are signed). They are kept in the
+  Credential Manager only until the file is complete, never in settings, the saved list or logs.
+- One connection per file for now. A rough measurement against a distant public server gave about 1.5
+  times the speed with four range connections, so parallel ranges are listed as open work rather than
+  dismissed.
+
+**Evidence.** `testdirectdownload` (42 cases against a local server). In a test instance with its own
+profile: three public films (download.blender.org, and archive.org through its redirects) were checked,
+named and sized correctly in the add dialog. One was paused, the app was quit while another was still
+downloading, and after the restart the running one continued by itself and the paused one when started.
+Both match archive.org's published MD5. Afterwards no link was left in the Credential Manager, and none
+had appeared in `directdownloads.json`, `qBittorrent.ini` or the log.
+
 ## Live Real-Debrid observations (2026-11-11, one account, one torrent — not a general proof)
 
 First run of the adapter against the real service: an installed build, one account, one torrent.

@@ -82,6 +82,9 @@ namespace Modern
         QPushButton *addPrimaryAction(QAction *action, const QString &text);
         QPushButton *addSecondaryAction(QAction *action, const QString &text);
 
+        // The texts for "nothing yet" and "nothing matches"; the defaults speak about torrents.
+        void setTexts(const QString &emptyTitle, const QString &emptyBody);
+
     private:
         bool eventFilter(QObject *watched, QEvent *event) override;
         void refresh();
@@ -91,6 +94,8 @@ namespace Modern
         QLabel *m_title = nullptr;
         QLabel *m_body = nullptr;
         QWidget *m_buttons = nullptr;
+        QString m_emptyTitle;
+        QString m_emptyBody;
     };
 
     // Sidebar filter rows: neutral hover/selection, icon, name and a right-aligned count parsed

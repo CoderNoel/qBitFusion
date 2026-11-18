@@ -270,6 +270,13 @@ QPushButton *Modern::EmptyState::addSecondaryAction(QAction *action, const QStri
     return button;
 }
 
+void Modern::EmptyState::setTexts(const QString &emptyTitle, const QString &emptyBody)
+{
+    m_emptyTitle = emptyTitle;
+    m_emptyBody = emptyBody;
+    refresh();
+}
+
 bool Modern::EmptyState::eventFilter(QObject *watched, QEvent *event)
 {
     if ((watched == m_view->viewport()) && (event->type() == QEvent::Resize))
@@ -295,8 +302,9 @@ void Modern::EmptyState::refresh()
     }
     else
     {
-        m_title->setText(tr("No torrents"));
-        m_body->setText(tr("Add a torrent file or a magnet link, or drop a .torrent file on this window."));
+        m_title->setText(m_emptyTitle.isEmpty() ? tr("No torrents") : m_emptyTitle);
+        m_body->setText(m_emptyBody.isEmpty()
+                ? tr("Add a torrent file or a magnet link, or drop a .torrent file on this window.") : m_emptyBody);
         m_buttons->show();
     }
     // A wrapped label inside an aligned layout cell does not get height-for-width; size it here.

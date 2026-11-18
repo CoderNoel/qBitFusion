@@ -12,6 +12,7 @@ set(testFiles
     testbittorrenttrackerentry.cpp
     testconceptsexplicitlyconvertibleto.cpp
     testconceptsstringable.cpp
+    testdirectdownload.cpp
     testglobal.cpp
     testhybridcoordinator.cpp
     testhybridfilebinding.cpp

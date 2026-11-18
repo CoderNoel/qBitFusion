@@ -1561,8 +1561,16 @@ void TransferListWidget::dropEvent(QDropEvent *event)
     // Download torrents
     if (!torrentFiles.isEmpty())
     {
-        for (const QString &file : asConst(torrentFiles))
-            app()->addTorrentManager()->addTorrent(file);
+        // qBitFusion: an http(s) link may serve a file instead of a torrent; the window checks it once.
+        if (MainWindow *window = app()->mainWindow())
+        {
+            window->addLinks(torrentFiles);
+        }
+        else
+        {
+            for (const QString &file : asConst(torrentFiles))
+                app()->addTorrentManager()->addTorrent(file);
+        }
 
         return;
     }

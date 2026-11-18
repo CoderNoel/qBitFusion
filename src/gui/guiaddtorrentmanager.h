@@ -64,6 +64,10 @@ public:
     ~GUIAddTorrentManager() override;
 
     bool addTorrent(const QString &source, const BitTorrent::AddTorrentParams &params = {}, AddTorrentOption option = AddTorrentOption::Default);
+    // qBitFusion: a .torrent already downloaded (by the link check of the direct download flow).
+    // `source` is what logs and messages show.
+    bool addTorrentData(const QString &source, const QByteArray &data, const BitTorrent::AddTorrentParams &params = {}
+            , AddTorrentOption option = AddTorrentOption::Default);
 
 private:
     void onDownloadFinished(const Net::DownloadResult &result);
