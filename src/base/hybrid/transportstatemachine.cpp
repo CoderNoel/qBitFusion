@@ -86,13 +86,13 @@ Hybrid::TransportState Hybrid::TransportStateMachine::next(const MachineEvent ev
         if ((m_state == S::Paused) || (m_state == S::Checking) || (m_state == S::Completed))
             return m_state;
         // Re-evaluate from scratch: stops P2P immediately if it is no longer permitted.
-        if ((m_state == S::P2PActive || m_state == S::RecoveryProbing) && p2pPermitted(context))
+        if ((m_state == S::P2PActive || m_state == S::RecoveryProbing || m_state == S::CombinedActive) && p2pPermitted(context))
             return m_state;
         return entryState(context);
     case E::ConsentChanged:
         if (!isHybrid(context))
             return m_state;
-        if ((m_state == S::P2PActive || m_state == S::RecoveryProbing) && !p2pPermitted(context))
+        if ((m_state == S::P2PActive || m_state == S::RecoveryProbing || m_state == S::CombinedActive) && !p2pPermitted(context))
             return entryState(context);  // consent revoked: stop swarm activity now
         if ((m_state == S::WaitingForUser) && p2pPermitted(context))
             return S::P2PActive;
@@ -123,7 +123,7 @@ Hybrid::TransportState Hybrid::TransportStateMachine::next(const MachineEvent ev
 
     case S::ProbingProvider:
         if (event == E::ProviderReady)
-            return S::HttpActive;
+            return context.combined ? S::CombinedActive : S::HttpActive;
         if (event == E::ProviderUnavailable)
             return fallbackState(context, false, reason);
         if (event == E::ProviderNeedsUser)
@@ -145,6 +145,25 @@ Hybrid::TransportState Hybrid::TransportStateMachine::next(const MachineEvent ev
         // remaining pieces go to peers only if the policy permits; otherwise the user decides.
         if (event == E::HttpExhausted)
             return fallbackState(context, true, reason);
+        // Combined mode switched on: peers join the provider without pausing it.
+        if ((event == E::CombinedChanged) && context.combined)
+            return S::CombinedActive;
+        return m_state;
+
+    case S::CombinedActive:
+        // Peers are already running, so a provider failure needs no drain: in-flight HTTP work is
+        // cancelled and submitted pieces keep their exclusion until libtorrent's verdict.
+        if ((event == E::HttpOutage) || (event == E::ProviderUnavailable) || (event == E::ProviderNeedsUser))
+            return fallbackState(context, event == E::ProviderNeedsUser, reason);
+        if (event == E::HttpExhausted)
+            return fallbackState(context, true, reason);
+        if (event == E::TailToPeers)
+            return fallbackState(context, false, reason);
+        // The provider finishes alone: hold peers, wait for them to drain, then HTTP_ACTIVE.
+        if (event == E::TailToProvider)
+            return S::HttpReady;
+        if ((event == E::CombinedChanged) && !context.combined)
+            return S::HttpReady;
         return m_state;
 
     case S::HttpDraining:
@@ -159,7 +178,7 @@ Hybrid::TransportState Hybrid::TransportStateMachine::next(const MachineEvent ev
 
     case S::RecoveryProbing:
         if (event == E::RecoveryProbeOk)
-            return S::HttpReady;
+            return context.combined ? S::CombinedActive : S::HttpReady;
         if ((event == E::RecoveryProbeFailed) || (event == E::ProviderNeedsUser))
             return S::P2PActive;
         return m_state;
@@ -201,10 +220,16 @@ Hybrid::Transition Hybrid::TransportStateMachine::handle(const MachineEvent even
 
     // Defence in depth for ADR-004: whatever the table says, a policy that forbids P2P can never
     // land in a swarm state.
-    if (!p2pPermitted(context) && ((to == TransportState::P2PActive) || (to == TransportState::RecoveryProbing)))
+    if (!p2pPermitted(context) && ((to == TransportState::P2PActive) || (to == TransportState::RecoveryProbing)
+            || (to == TransportState::CombinedActive)))
     {
         reason = Reason::PermissionRequiredForP2P;
         to = (context.policy == TransportPolicy::DebridPreferred) ? TransportState::WaitingForUser : TransportState::WaitingForProvider;
+    }
+    // Combined mode is opt-in (ADR-011): without it the sources take turns as before.
+    else if (!context.combined && (to == TransportState::CombinedActive))
+    {
+        to = TransportState::HttpReady;
     }
 
     m_state = to;
@@ -222,12 +247,13 @@ bool Hybrid::swarmAllowed(const TransportState state, const MachineContext &cont
         return true;
     if (!policyAllowsP2P(context.policy, context.fallbackConsent))
         return false;
-    return (state == TransportState::P2PActive) || (state == TransportState::RecoveryProbing);
+    return (state == TransportState::P2PActive) || (state == TransportState::RecoveryProbing)
+            || (state == TransportState::CombinedActive);
 }
 
 bool Hybrid::httpDispatchAllowed(const TransportState state)
 {
-    return state == TransportState::HttpActive;
+    return (state == TransportState::HttpActive) || (state == TransportState::CombinedActive);
 }
 
 Hybrid::ActiveTransport Hybrid::activeTransport(const TransportState state)
@@ -239,6 +265,8 @@ Hybrid::ActiveTransport Hybrid::activeTransport(const TransportState state)
     case TransportState::P2PActive:
     case TransportState::RecoveryProbing:
         return ActiveTransport::P2P;
+    case TransportState::CombinedActive:
+        return ActiveTransport::Combined;
     case TransportState::HttpDraining:
     case TransportState::HttpReady:
         return ActiveTransport::Switching;

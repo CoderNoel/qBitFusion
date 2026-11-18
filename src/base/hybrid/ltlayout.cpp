@@ -32,6 +32,8 @@
 #include <libtorrent/info_hash.hpp>
 #include <libtorrent/torrent_info.hpp>
 
+#include <algorithm>
+
 #include <QByteArray>
 
 namespace
@@ -94,4 +96,27 @@ Hybrid::TorrentIdentity Hybrid::nativeIdentity(const lt::info_hash_t &hashes, co
         identity.infoHashV2 = toHex(hashes.v2.data(), static_cast<int>(hashes.v2.size()));
     identity.name = name;
     return identity;
+}
+
+std::vector<lt::download_priority_t> Hybrid::filePiecePriorities(const lt::torrent_info &info
+        , const std::vector<lt::download_priority_t> &nativeFilePriorities)
+{
+    const lt::file_storage &fs = info.layout();
+    std::vector<lt::download_priority_t> pieces(static_cast<std::size_t>(fs.num_pieces()), lt::dont_download);
+    for (const lt::file_index_t file : fs.file_range())
+    {
+        const std::int64_t size = fs.file_size(file);
+        if ((size == 0) || fs.pad_file_at(file))
+            continue;
+        const auto index = static_cast<std::size_t>(static_cast<int>(file));
+        const lt::download_priority_t priority = (index < nativeFilePriorities.size())
+                ? nativeFilePriorities[index] : lt::default_priority;
+        if (priority == lt::dont_download)
+            continue;
+        const int first = static_cast<int>(fs.map_file(file, 0, 1).piece);
+        const int last = static_cast<int>((fs.file_offset(file) + size - 1) / fs.piece_length());
+        for (int piece = first; (piece <= last) && (piece < fs.num_pieces()); ++piece)
+            pieces[static_cast<std::size_t>(piece)] = std::max(pieces[static_cast<std::size_t>(piece)], priority);
+    }
+    return pieces;
 }

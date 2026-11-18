@@ -114,6 +114,18 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     defaultsLayout->addWidget(muted(tr("You can change the source for each torrent when adding it, or later from its context menu."), m_defaultsBox));
     layout->addWidget(m_defaultsBox);
 
+    // ---- combined sources (ADR-011)
+    m_combinedBox = new QGroupBox(tr("Peers alongside the debrid service"), content);
+    auto *combinedLayout = new QVBoxLayout(m_combinedBox);
+    m_combined = new QCheckBox(tr("Download from the debrid service and from peers at the same time"), m_combinedBox);
+    combinedLayout->addWidget(m_combined);
+    combinedLayout->addWidget(muted(tr("Applies to torrents set to \"%1\" where you allowed BitTorrent. Peers are then contacted "
+            "from the start, not only when the service fails, so they can see your IP address. This helps when your connection "
+            "is faster than the service delivers; if the service already fills your connection, it adds little. "
+            "\"%2\" torrents never contact peers.")
+            .arg(Hybrid::displayName(Hybrid::TransportPolicy::DebridPreferred), Hybrid::displayName(Hybrid::TransportPolicy::DebridOnly)), m_combinedBox));
+    layout->addWidget(m_combinedBox);
+
     // ---- provider account changes
     auto *remoteBox = new QGroupBox(tr("Provider account changes"), content);
     auto *remoteLayout = new QVBoxLayout(remoteBox);
@@ -156,6 +168,7 @@ HybridGui::OptionsPage::OptionsPage(QWidget *parent)
     connect(m_enabled, &QCheckBox::toggled, this, [this] { updateEnabledState(); emit changed(); });
     connect(m_picker, &SourcePicker::selectionChanged, this, &OptionsPage::changed);
     connect(m_remoteCreate, &QCheckBox::toggled, this, &OptionsPage::changed);
+    connect(m_combined, &QCheckBox::toggled, this, &OptionsPage::changed);
     for (QSpinBox *spin : {m_perTorrent, m_global, m_memory})
         connect(spin, &QSpinBox::valueChanged, this, &OptionsPage::changed);
 
@@ -197,9 +210,11 @@ void HybridGui::OptionsPage::load()
     const QSignalBlocker b4 {m_perTorrent};
     const QSignalBlocker b5 {m_global};
     const QSignalBlocker b6 {m_memory};
+    const QSignalBlocker b7 {m_combined};
     m_enabled->setChecked(manager->isEnabled());
     m_picker->setSelection(manager->defaultPolicy(), manager->defaultP2PConsent());
     m_remoteCreate->setChecked(manager->allowRemoteCreate());
+    m_combined->setChecked(manager->combinedSources());
     m_perTorrent->setValue(manager->maxPiecesPerTorrent());
     m_global->setValue(manager->maxGlobalPieces());
     m_memory->setValue(manager->maxBufferedMiB());
@@ -213,6 +228,7 @@ void HybridGui::OptionsPage::save() const
     manager->setDefaultPolicy(m_picker->policy());
     manager->setDefaultP2PConsent(m_picker->p2pConsent());
     manager->setAllowRemoteCreate(m_remoteCreate->isChecked());
+    manager->setCombinedSources(m_combined->isChecked());
     manager->setMaxPiecesPerTorrent(m_perTorrent->value());
     manager->setMaxGlobalPieces(m_global->value());
     manager->setMaxBufferedMiB(m_memory->value());
@@ -223,6 +239,7 @@ void HybridGui::OptionsPage::updateEnabledState()
 {
     const bool on = m_enabled->isChecked();
     m_defaultsBox->setEnabled(on);
+    m_combinedBox->setEnabled(on);
     m_limitsBox->setEnabled(on);
 }
 

@@ -109,6 +109,8 @@ QIcon HybridGui::iconFor(const Hybrid::HybridStatus &status)
     case S::P2PActive:
     case S::RecoveryProbing:
         return UIThemeManager::instance()->getIcon(u"peers"_s);
+    case S::CombinedActive:
+        return UIThemeManager::instance()->getIcon(u"folder-remote"_s);
     case S::HttpDraining:
     case S::HttpReady:
     case S::ProbingProvider:
@@ -162,6 +164,8 @@ QString HybridGui::sourceText(const Hybrid::HybridStatus &status)
         return QCoreApplication::translate("HybridGui", "BitTorrent (fallback)");
     case S::RecoveryProbing:
         return QCoreApplication::translate("HybridGui", "BitTorrent · checking %1").arg(provider);
+    case S::CombinedActive:
+        return QCoreApplication::translate("HybridGui", "%1 + peers").arg(provider);
     case S::HttpDraining:
     case S::HttpReady:
         return QCoreApplication::translate("HybridGui", "Switching...");
@@ -207,6 +211,8 @@ QString HybridGui::sourceToolTip(const Hybrid::HybridStatus &status)
     }
     lines << QCoreApplication::translate("HybridGui", "HTTPS ↓ %1 · %2 pieces verified")
             .arg(Utils::Misc::friendlyUnit(status.httpRateBps, true), QString::number(status.httpVerifiedPieces));
+    if (status.activeTransport == Hybrid::ActiveTransport::Combined)
+        lines << QCoreApplication::translate("HybridGui", "Peers ↓ %1").arg(Utils::Misc::friendlyUnit(status.p2pRateBps, true));
     if (status.httpHashFailures > 0)
         lines << QCoreApplication::translate("HybridGui", "Rejected by hash check: %1 pieces").arg(status.httpHashFailures);
     if (status.switchCount > 0)

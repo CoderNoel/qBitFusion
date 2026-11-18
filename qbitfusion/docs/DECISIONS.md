@@ -85,6 +85,101 @@ downloading, and after the restart the running one continued by itself and the p
 Both match archive.org's published MD5. Afterwards no link was left in the Credential Manager, and none
 had appeared in `directdownloads.json`, `qBittorrent.ini` or the log.
 
+## ADR-011 | Combined sources: provider and peers on one torrent at once — ACCEPTED (2026-11-18)
+
+**Trigger.** With serialized sources (ADR-007) a torrent uses either the provider or peers. On a line
+faster than the debrid server delivers, the rest of the line stays idle even when the torrent has a
+healthy swarm.
+
+**Decision.** An opt-in mode, off by default (Options > Hybrid sources, `Hybrid/CombinedSources`), in
+which HTTPS and peers fill different pieces of the same torrent at the same time. The choices below were
+put to the user as options and accepted as recommended.
+
+- **Who may use it.** Only torrents set to "Debrid preferred, BitTorrent fallback" with the user's P2P
+  consent. `isCombined()` is false for "Debrid only" and for "Debrid preferred" without consent, and the
+  state machine refuses `COMBINED_ACTIVE` without P2P permission whatever it is told (the 50 000-event
+  check now includes the new events and a context that asks for combined mode where P2P is forbidden).
+  When on, it applies from the start of every such download, not only when HTTPS is slow: there is no
+  trustworthy measure of the line's capacity to adapt on. The Options text says that peers are then
+  contacted from the start.
+- **New state** `COMBINED_ACTIVE`: swarm allowed, HTTP dispatch allowed. It replaces `HTTP_ACTIVE` after
+  a successful probe and `HTTP_READY` after a successful recovery probe. A provider failure goes
+  straight to `P2P_ACTIVE` (peers are already running, nothing to drain); in-flight HTTP work is cancelled
+  and submitted pieces keep their exclusion until libtorrent's verdict. Without combined mode every
+  transition is as before.
+- **How pieces are split: a moving window.** HTTPS walks the wanted pieces in index order with its usual
+  number in flight (`Hybrid/MaxHttpPiecesPerTorrent`); peers pick rarest-first among the rest. Only the
+  pieces HTTPS holds are hidden from peers, with libtorrent piece priority 0 — the one mechanism that
+  keeps libtorrent's picker off a piece. Each side skips what the other holds or has verified, so when one
+  side runs out the other simply takes the rest.
+- **No collisions, one referee.** The piece ownership arbiter stays the single referee. A piece is hidden
+  before its first HTTP byte is requested. Its bytes are given to `add_piece` only after a read of
+  libtorrent's download queue that was requested after the piece was hidden (and after the last time the
+  torrent had to hide it again) and that does not list it. If a peer requested the piece just before it
+  was hidden, HTTPS lets go of it and shows it to peers again (`piecesYieldedToPeers`). `overwrite_existing`
+  is still never used.
+- **The user's priorities.** File priorities are never touched. The exclusion is in memory only
+  (`TorrentImpl::setHybridPeerExclusion`): the priority given back is the one qBittorrent itself set (its
+  first/last-piece vector, or libtorrent's own file-to-piece rule, mirrored in `Hybrid::filePiecePriorities`
+  and tested against libtorrent), resume data is written with those values, and a file priority change,
+  the first/last-piece option or a reload re-applies the exclusion. A restart therefore starts without
+  any exclusion.
+- **Side effects of priority 0, handled.** libtorrent counts a hidden piece as unwanted. Progress and
+  "wanted size" add the hidden bytes back. If libtorrent reports "finished" while a hidden piece is still
+  missing, qBittorrent's completion handling (moving files, notifications, the "run on finish" program)
+  waits until it is in.
+- **End of the download: the faster source.** When no more than twice the HTTPS window is left outside
+  HTTPS, the measured rates decide (ties go to the provider). Provider faster: HTTP work in flight is
+  cancelled, peers are held with the graceful pause, and HTTPS finishes alone (`HTTP_READY` →
+  `HTTP_ACTIVE`, reason `tail_to_provider`). Peers faster: HTTPS stops (at most one window of partial
+  HTTP pieces is lost) and peers finish (`P2P_ACTIVE`, reason `tail_to_peers`), with no probing back
+  unless peers then send nothing for 20 s and the 30 s source dwell has passed (`peers_stalled`).
+  If peers already hold every remaining piece when the threshold is reached, nothing is handed over. Racing both sources for the same pieces was
+  rejected: it breaks the collision rule.
+- **Display.** The Source column reads "Real-Debrid + peers" (state name "Debrid + peers"); its tooltip
+  splits HTTPS ↓ and Peers ↓. Speed and ETA show the sum, as they already added the HTTPS rate.
+
+**Evidence.** `testhybridcoordinator`, real libtorrent sessions on loopback, a local range server as the
+provider and one local seed (366–368 pieces of 16 KiB). Every combined run checks: output byte-identical;
+no hash failure; no provider piece passed to `add_piece` while libtorrent's download queue listed it
+(read by the test sink itself at that moment); no piece submitted twice; peer payload no larger than the
+pieces HTTPS did not supply plus four pieces; every hidden piece back at its exact priority; libtorrent
+never "finished" with a piece missing.
+
+| Test | Result |
+| --- | --- |
+| `combinedDownloadsFromBothWithoutCollisions` (v1, hybrid with pads; both sources 512 KiB/s) | Roughly half the pieces from each source (e.g. 199 / 168), 1–7 pieces handed back to peers that had started them, 0 collisions. |
+| `combinedTailGoesToFasterSource` | Provider 2 MiB/s vs seed 96 KiB/s: `tail_to_provider`, peers held, provider finishes. Provider 96 KiB/s vs seed 2 MiB/s: peers finish, never `tail_to_provider`. |
+| `combinedProviderOutageLeavesRestToPeers` | `503` after 20%: `COMBINED_ACTIVE → P2P_ACTIVE` directly, peers fetch only the missing pieces. |
+| `combinedPeersStallProviderFinishes` | The only seed is shut down after delivering 20%: provider takes the rest, `tail_to_provider`. |
+| `combinedSettingNeverReachesSwarmWithoutPermission` | Setting on with "Debrid only", and with "Debrid preferred" without consent: never `COMBINED_ACTIVE`, 0 tracker and peer connections, no piece priority touched. |
+| `filePiecePrioritiesMatchLibtorrent` | The restored priorities equal libtorrent's own for v1, hybrid and v2 layouts and three file-priority patterns. |
+| `testhybridstatemachine` | New transitions, and the 50 000-event check with combined mode asked for where P2P is forbidden. |
+
+**Measurement** (`combinedThroughputBeatsEitherSource`, provider and seed each limited to 768 KiB/s,
+times include the provider probe and connecting the seed):
+
+| Fixture | HTTPS only | Peers only | Both at once |
+| --- | --- | --- | --- |
+| 5.7 MiB (in every test run; three runs) | 8.0–8.4 s, 0.68–0.72 MiB/s | 10.0 s, 0.57 MiB/s | 5.6–6.1 s, 0.94–1.02 MiB/s |
+| 17.2 MiB (`QBF_MEASURE_SCALE=60`) | 24.5 s, 0.70 MiB/s | 25.9 s, 0.66 MiB/s | 15.1 s, 1.14 MiB/s |
+
+On the larger fixture the two sources together reach 84% of the sum of their separate rates, about 1.6
+times either alone. The test asserts only that combined is at least 20% faster than the faster source.
+
+Three test-harness faults were found and fixed on the way, none in the product: the test sessions
+subscribed to every alert, so the per-peer debug log overflowed the queue and dropped piece verdicts (now
+the same categories as the app); an outgoing uTP connection to the local seed could stay in its handshake
+for seconds (the test sessions now use TCP); and the seed in `seed_mode` served no data for the hybrid
+v1+v2 torrent (it now checks its files first). The comparison of output now allows libtorrent up to 5 s
+to flush (spike Q1b).
+
+**Limits.** Loopback only, one seed, 16 KiB pieces (one block per piece, so a piece partly fetched by a
+peer and then finished by HTTPS is not exercised here; libtorrent's `add_piece` keeps such blocks, as
+in the serialized hand-over). Not yet run against the real service or a real swarm. The `TorrentImpl`
+parts (resume-data values, re-applying after priority changes, the deferred completion) are exercised
+only through the app, not by an automated test.
+
 ## Live Real-Debrid observations (2026-11-11, one account, one torrent — not a general proof)
 
 First run of the adapter against the real service: an installed build, one account, one torrent.

@@ -80,6 +80,13 @@ namespace Hybrid
         RangeTimeouts timeouts;
         HealthConfig health;
         int drainTimeoutMs = 10'000;
+
+        // Combined mode (ADR-011): provider and peers on different pieces of one torrent at once.
+        // Opt-in, and only for DebridPreferred torrents with the user's P2P consent.
+        bool combinedSources = false;
+        int tailPieces = 0;                 // last pieces given to one source; 0 = 2 x maxPiecesInFlight
+        int peerQueueIntervalMs = 500;      // how often libtorrent's download queue is read
+        qint64 peerStallMs = 20'000;        // peers finishing the tail but sending nothing this long
     };
 
     struct HybridStatus
@@ -98,6 +105,8 @@ namespace Hybrid
         int httpHashFailures = 0;
         int httpInFlight = 0;
         qint64 httpRateBps = 0;
+        qint64 p2pRateBps = 0;          // peers, while combined mode is in effect
+        int piecesYieldedToPeers = 0;   // HTTP fetches dropped because a peer had started the piece
         quint64 switchCount = 0;
         qint64 retryAfterSeconds = 0;
 
@@ -128,6 +137,8 @@ namespace Hybrid
         void start(TransportPolicy policy, bool p2pConsent);
         void setPolicy(TransportPolicy policy, bool p2pConsent);
         void setProvider(Provider *provider);
+        void setCombinedSources(bool enabled);
+        bool isCombined() const;   // combined mode is in effect for this torrent
 
         HybridStatus status() const;
         TransportState state() const;
@@ -180,6 +191,19 @@ namespace Hybrid
         bool hasProviderWork() const;
         void armRecoveryProbe();
 
+        // Combined mode (ADR-011).
+        bool needsPeerExclusion() const;
+        void syncPeerExclusion();
+        void requestPeerQueue();
+        void onPeerQueue(quint64 seq, quint64 generation, const QList<int> &queue);
+        bool peerQueueClears(int piece) const;
+        void yieldToPeers(int piece);
+        void submit(int piece, quint64 epoch, const PieceBuffer &buffer);
+        void releaseBudget(int piece);
+        int tailThreshold() const;
+        void decideTail();
+        void watchPeerStall();
+
         TorrentPieceSink *m_sink = nullptr;
         QPointer<Provider> m_provider;
         QNetworkAccessManager *m_network = nullptr;
@@ -212,6 +236,27 @@ namespace Hybrid
         QTimer *m_dispatchTimer = nullptr;
         QTimer *m_rateTimer = nullptr;
         qint64 m_rateWindowBytes = 0;
+
+        // Combined mode. A fetched piece is submitted only after a read of the peer queue that
+        // was requested after the piece was hidden from peers, and that does not list it.
+        struct AwaitingPiece
+        {
+            quint64 epoch = 0;
+            PieceBuffer buffer;
+        };
+        QSet<int> m_excluded;                       // pieces currently hidden from peers
+        QHash<int, quint64> m_claimSeq;             // first queue read that can clear the piece
+        QHash<int, AwaitingPiece> m_awaitingQueue;  // fetched, waiting for that read
+        quint64 m_queueRequested = 0;
+        quint64 m_queueDone = 0;
+        quint64 m_queueDoneGeneration = 0;
+        quint64 m_combinedStartSeq = 0;
+        bool m_queueInFlight = false;
+        qint64 m_queueRequestedAtMs = 0;
+        bool m_queueAgain = false;
+        bool m_tailDecided = false;
+        qint64 m_peerStallSinceMs = 0;
+        QTimer *m_queueTimer = nullptr;
 
         HybridStatus m_status;
     };

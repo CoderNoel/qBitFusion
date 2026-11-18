@@ -58,7 +58,11 @@ namespace Hybrid
         RecheckStarted,
         RecheckFinished,
         Completed,
-        FatalError
+        FatalError,
+        // Combined mode (ADR-011, qbitfusion/docs/DECISIONS.md).
+        CombinedChanged,         // the user switched combined mode on or off
+        TailToProvider,          // last pieces: the provider is faster, peers are held
+        TailToPeers              // last pieces: peers are faster, the provider stops
     };
 
     struct MachineContext
@@ -66,6 +70,9 @@ namespace Hybrid
         TransportPolicy policy = TransportPolicy::TorrentOnly;
         bool fallbackConsent = false;
         bool hasMetadata = false;
+        // Combined mode is in effect: the user enabled it and this torrent is DebridPreferred
+        // with consent. Never true without P2P permission (ADR-011).
+        bool combined = false;
     };
 
     struct Transition
@@ -94,7 +101,8 @@ namespace Hybrid
     };
 
     // Whether libtorrent may run swarm networking (peers, trackers, DHT, PEX, LSD) for the torrent.
-    // Only P2PActive and RecoveryProbing (and the Disabled/TorrentOnly upstream path) allow it.
+    // Only P2PActive, RecoveryProbing and CombinedActive (and the Disabled/TorrentOnly upstream
+    // path) allow it.
     // HttpReady drains peers and therefore must already be graceful-pausing.
     bool swarmAllowed(TransportState state, const MachineContext &context);
 

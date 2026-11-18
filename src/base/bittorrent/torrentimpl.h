@@ -45,6 +45,7 @@
 #include <QMap>
 #include <QObject>
 #include <QQueue>
+#include <QSet>
 #include <QString>
 
 #include "base/path.h"
@@ -264,6 +265,11 @@ namespace BitTorrent
         void setHybridHttpRate(qint64 bytesPerSecond);
         qint64 hybridHttpRate() const;
         void addExternalPiece(int pieceIndex, std::vector<char> &&data);
+        // Combined sources (ADR-011): keep peers off pieces the provider is fetching. In memory
+        // only; see the definition for how the user's own piece priorities are kept.
+        void setHybridPeerExclusion(const QList<int> &exclude, const QList<int> &include);
+        quint64 hybridPeerExclusionGeneration() const;
+        qint64 hybridPeerDownloadRate() const;
 
         int fileIndexFromNative(lt::file_index_t nativeFileIndex) const;
 
@@ -325,6 +331,10 @@ namespace BitTorrent
         void moveStorage(const Path &newPath, MoveStorageContext context);
         void manageActualFilePaths();
         void applyFirstLastPiecePriority(bool enabled);
+        std::vector<lt::download_priority_t> firstLastPiecePriorities(bool enabled) const;
+        std::vector<lt::download_priority_t> filePiecePriorities() const;
+        lt::download_priority_t userPiecePriority(int piece);
+        void reapplyHybridPeerExclusion();
 
         void prepareResumeData(lt::add_torrent_params resumeData);
         void endReceivedMetadataHandling(const Path &savePath, const PathList &fileNames);
@@ -390,6 +400,15 @@ namespace BitTorrent
         bool m_isStopped = false;
         bool m_transportHold = false;
         qint64 m_hybridHttpRate = 0;
+        // Which of qBittorrent's own rules last set the piece priorities: libtorrent's from file
+        // priorities, or applyFirstLastPiecePriority(on/off). Only read while peers are excluded.
+        enum class PiecePriorityRule { Files, FirstLastOff, FirstLastOn };
+        PiecePriorityRule m_piecePriorityRule = PiecePriorityRule::Files;
+        std::vector<lt::download_priority_t> m_userPiecePriorities;   // lazily, from the rule
+        QSet<int> m_hybridExcludedPieces;
+        qint64 m_hybridExcludedBytes = 0;    // missing bytes hidden from libtorrent's "wanted"
+        quint64 m_hybridExclusionGeneration = 0;
+        bool m_hybridFinishDeferred = false;
         StopCondition m_stopCondition = StopCondition::None;
         SSLParameters m_sslParams;
 
