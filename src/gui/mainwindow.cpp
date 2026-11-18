@@ -96,6 +96,7 @@
 #include "directdownload/adddirectdownloaddialog.h"
 #include "directdownload/directdownloadwidget.h"
 #include "modern/modernappearance.h"
+#include "onboarding/onboardingdialog.h"
 #include "modern/modernwidgets.h"
 #include "optionsdialog.h"
 #include "powermanagement/powermanagement.h"
@@ -221,6 +222,12 @@ MainWindow::MainWindow(IGUIApplication *app, const WindowState initialState, con
     m_ui->actionBottomQueuePos->setIcon(UIThemeManager::instance()->getIcon(u"go-bottom"_s));
     m_ui->actionDelete->setIcon(UIThemeManager::instance()->getIcon(u"list-remove"_s));
     m_ui->actionDocumentation->setIcon(UIThemeManager::instance()->getIcon(u"help-contents"_s));
+    {
+        auto *tour = new QAction(UIThemeManager::instance()->getIcon(u"help-about"_s), tr("Welcome tour"), this);
+        tour->setToolTip(tr("What qBitFusion adds to qBittorrent, and connecting a debrid service"));
+        connect(tour, &QAction::triggered, this, &MainWindow::showOnboarding);
+        m_ui->menuHelp->insertAction(m_ui->actionDocumentation, tour);
+    }
     m_ui->actionDonateMoney->setIcon(UIThemeManager::instance()->getIcon(u"wallet-open"_s));
     m_ui->actionExit->setIcon(UIThemeManager::instance()->getIcon(u"application-exit"_s));
     m_ui->actionLock->setIcon(UIThemeManager::instance()->getIcon(u"object-locked"_s));
@@ -918,6 +925,19 @@ void MainWindow::ensureLinksTab()
     static_cast<HidableTabWidget *>(m_tabs.data())->notifyTabsChanged();
 }
 
+void MainWindow::showOnboarding()
+{
+    if (m_onboarding)
+    {
+        m_onboarding->raise();
+        m_onboarding->activateWindow();
+        return;
+    }
+    m_onboarding = new OnboardingDialog(this);
+    m_onboarding->setAttribute(Qt::WA_DeleteOnClose);
+    m_onboarding->open();
+}
+
 void MainWindow::updateLinksTabText()
 {
     if (!m_linksWidget)
@@ -1605,6 +1625,13 @@ void MainWindow::showEvent(QShowEvent *e)
         {
             m_propertiesWidget->readSettings();
             m_neverShown = false;
+
+            // qBitFusion: the welcome tour, once the window is on screen.
+            QTimer::singleShot(700, this, [this]
+            {
+                if (Onboarding::shouldShow() && isVisible() && !Preferences::instance()->isUILocked())
+                    showOnboarding();
+            });
         }
 
         if (currentTabWidget() == m_transferListWidget)

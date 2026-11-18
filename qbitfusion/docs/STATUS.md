@@ -22,6 +22,7 @@ Last reviewed: 2026-11-18.
 | Hybrid GUI | `src/gui/hybrid/` | Options page, source picker, consent prompt, device sign-in dialog, the Source column and its context menu. |
 | Modern look | `src/gui/modern/` | Light and dark palettes with a configurable accent, one stylesheet, a 108-glyph monochrome icon set tinted at paint time, the app mark, and the shell widgets (page switcher, sidebar rows, empty state, accent picker). `mainwindow.*` builds the header and action bar; the menu bar is hidden and its actions stay registered on the window so shortcuts keep working. |
 | Direct downloads | `src/base/directdownload/`, `src/gui/directdownload/` | Link and content classification, file naming, redirect rules (`linkclassifier.*`); the link check and the resumable transfer (`httptransfer.*`); queue, retries, persistence and credential storage (`directdownloadmanager.*`). GUI: the Links page, its model, and the dialog that checks pasted links. `mainwindow.*` and `app/application.cpp` route http(s) links through the check. |
+| Welcome tour | `src/gui/onboarding/` | Five pages with drawn, animated illustrations: what is new, how hybrid downloads work, connecting Real-Debrid (device sign-in on the page, then a check that the account answers, then the default source), Links, and where everything is. Shown once per `Onboarding::TOUR_VERSION` (setting `GUI/OnboardingVersion`), from `MainWindow::showEvent()`; Help > Welcome tour opens it again. |
 | Naming | throughout the GUI | The user-visible name is qBitFusion and the executable is `qbitfusion.exe`. Settings and profile folder names are unchanged from qBittorrent. Upstream's update check is disabled, because it would offer stock qBittorrent. |
 | Tooling | `qbitfusion/` | Windows scripts (toolchain, build, install, package, test instance, window capture), the libtorrent feasibility spike, and a branding check. |
 
@@ -191,6 +192,16 @@ Direct downloads:
     torrent.
 22. **Placeholder videos.** Some add-ons redirect to a short "still caching" video when the debrid service
     does not have the file yet. That video is downloaded like any other file.
+
+Welcome tour:
+
+23. **Welcome tour states not all seen.** Checked by screenshot: every page, and the connected state with
+    a real account (verified, debrid sources off). The not-connected, waiting-for-approval and error
+    states of the Real-Debrid step were not shown on screen, because test instances share the Real-Debrid
+    login in the Credential Manager with the installed copy, and signing out there would remove it.
+    They reuse the same provider calls as the sign-in dialog in Options.
+24. **Test instances share the provider login.** The Credential Manager entries are per Windows user, not
+    per profile, so a test instance uses the same Real-Debrid account as the installed copy.
 
 ## Next
 

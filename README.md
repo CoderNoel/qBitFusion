@@ -86,6 +86,9 @@ layout and resume data, so the two kinds of source can be combined in one downlo
 - Light and dark schemes that follow the system, with a configurable accent color.
 - A monochrome icon set, a reworked add-torrent dialog, and restyled Options pages.
 - Options > Behavior can switch back to the classic qBittorrent look.
+- A welcome tour on first start explains what is new compared to qBittorrent, connects Real-Debrid with
+  a live check that the account answers, and shows where everything is. It can be skipped, and opened
+  again from Help > Welcome tour.
 
 ### Updates
 

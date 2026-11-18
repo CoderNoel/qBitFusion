@@ -54,6 +54,7 @@ class DirectDownloadWidget;
 class DownloadFromURLDialog;
 class ExecutionLogWidget;
 class LineEdit;
+class OnboardingDialog;
 class OptionsDialog;
 class PowerManagement;
 class ProgramUpdater;
@@ -227,6 +228,8 @@ private:
     void ensureLinksTab();
     void updateLinksTabText();
     void displayLinksTab();
+    // qBitFusion welcome tour: once per tour version, and from Help > Welcome tour.
+    void showOnboarding();
     void updateSelectionSummary();
     void createTorrentTriggered(const Path &path);
     void showStatusBar(bool show);
@@ -285,6 +288,7 @@ private:
     QPointer<RSSWidget> m_rssWidget;
     QPointer<ExecutionLogWidget> m_executionLog;
     QPointer<DirectDownloadWidget> m_linksWidget;
+    QPointer<OnboardingDialog> m_onboarding;
     // Modern shell (null with the classic look)
     Modern::NavButton *m_navTransfers = nullptr;
     Modern::NavButton *m_navLinks = nullptr;

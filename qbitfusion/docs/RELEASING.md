@@ -12,6 +12,10 @@ A qBitFusion version is the qBittorrent version it is based on, plus a revision:
   `qbitfusion/scripts/install-windows.ps1` and `package-windows.ps1`. A development build never updates
   itself, and About shows it as "development build".
 
+The welcome tour appears once after an update only when `Onboarding::TOUR_VERSION`
+(`src/gui/onboarding/onboardingdialog.h`) is higher than the one the user has seen. Raise it in a release
+that everyone should hear about; leave it for ordinary updates.
+
 Each release is tagged `v<version>`, for example `v5.3.0.1`. Do not create tags starting with `release-`:
 those are qBittorrent's.
 

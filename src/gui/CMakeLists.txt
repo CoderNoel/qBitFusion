@@ -77,6 +77,8 @@ add_library(qbt_gui STATIC
     log/loglistview.h
     log/logmodel.h
     mainwindow.h
+    onboarding/onboardingart.h
+    onboarding/onboardingdialog.h
     optionsdialog.h
     powermanagement/inhibitor.h
     powermanagement/powermanagement.h
@@ -191,6 +193,8 @@ add_library(qbt_gui STATIC
     log/loglistview.cpp
     log/logmodel.cpp
     mainwindow.cpp
+    onboarding/onboardingart.cpp
+    onboarding/onboardingdialog.cpp
     optionsdialog.cpp
     powermanagement/inhibitor.cpp
     powermanagement/powermanagement.cpp
