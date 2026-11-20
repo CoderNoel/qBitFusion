@@ -4,14 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>qBitFusion: one download, from your debrid service and the torrent swarm</title>
-    <meta name="description" content="A torrent app that can also fetch the same files from your debrid service. It switches between the two when one drops out, and never starts over.">
+    <meta name="description" content="A torrent app that can also fetch the same files from your debrid service. It can use both at once to fill your connection, carries on with the other when one drops out, and never starts over.">
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark light">
     <link rel="canonical" href="https://qbitfusion.org/">
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="qBitFusion">
-    <meta property="og:description" content="One download, two ways to finish it: your debrid service and the torrent swarm.">
+    <meta property="og:description" content="One download from your debrid service and the torrent swarm, even both at once.">
     <meta property="og:url" content="https://qbitfusion.org/">
     <meta property="og:image" content="https://qbitfusion.org/assets/og.png">
     <meta property="og:image:width" content="1200">
@@ -55,11 +55,11 @@
         <section class="hero theme-dark" id="top">
             <div class="wrap hero-copy">
                 <p class="eyebrow reveal">Experimental preview for Windows</p>
-                <h1 class="display reveal">One download.<br><span class="ember-text">Two ways to finish it.</span></h1>
+                <h1 class="display reveal">One download.<br><span class="ember-text">Two sources at once.</span></h1>
                 <p class="lede reveal">
-                    qBitFusion is a torrent app that can also fetch the same files from your debrid service. It uses
-                    the service when it can, turns to the torrent swarm when it can't, and carries on from exactly
-                    where it was. Nothing starts over.
+                    qBitFusion is a torrent app that can also fetch the same files from your debrid service. It can
+                    use the service and the torrent swarm at the same time to fill your connection, and when one of
+                    them drops out, the other carries on from exactly where it was. Nothing starts over.
                 </p>
                 <div class="ctas reveal">
                     <a class="btn" href="#download">Download</a>
@@ -122,11 +122,21 @@
                     <p class="eyebrow">How qBitFusion works</p>
                     <h2 class="headline">Your service and the swarm,<br><span class="ember-text">in one download.</span></h2>
                     <p class="section-lede">qBitFusion treats your debrid service as one more source for the torrent
-                        itself. One source works at a time, and when it hands over to the other, everything already
-                        downloaded stays put.</p>
+                        itself. The two can work side by side on different pieces, so a connection faster than your
+                        service gets used in full, or one at a time. Either way, when one drops out, everything
+                        already downloaded stays put.</p>
                 </header>
 
                 <div class="flow-stage reveal" data-flow>
+                    <div class="flow-top">
+                        <label class="toggle">
+                            <input type="checkbox" role="switch" data-combined checked>
+                            <span class="toggle-ui" aria-hidden="true"></span>
+                            <span class="toggle-text">Both at once</span>
+                        </label>
+                        <p class="flow-hint">Optional and off by default. In the app: Options › Hybrid sources ›
+                            "Download from the debrid service and from peers at the same time".</p>
+                    </div>
                     <svg class="flow-art" role="img" aria-label="Animated illustration: a download starts from the debrid service, switches to the torrent swarm when the service drops out, switches back when it returns, and finishes with every piece checked." data-flow-art></svg>
                     <div class="flow-controls">
                         <button class="flow-play" type="button" data-flow-play aria-label="Pause the animation">
@@ -171,9 +181,9 @@
                     <article data-mode-copy="preferred">
                         <h3>Debrid preferred, for getting it done</h3>
                         <p>Your service supplies everything it has, and the swarm fills in the rest. Here the service is
-                            missing one file, so those pieces come from peers. Using the swarm needs your permission
-                            for that torrent, because peers can see your IP address. Without it, the download waits for
-                            your service instead.</p>
+                            missing one file, so those pieces come from peers: after the service, or alongside it with
+                            Both at once. Using the swarm needs your permission for that torrent, because peers can
+                            see your IP address. Without it, the download waits for your service instead.</p>
                     </article>
                     <article data-mode-copy="bittorrent" hidden>
                         <h3>BitTorrent, as usual</h3>
@@ -194,6 +204,11 @@
                             <span class="source-name">Torrent swarm</span>
                             <span class="source-state" data-state-peers></span>
                         </div>
+                        <label class="toggle sim-toggle" data-sim-combined>
+                            <input type="checkbox" role="switch" data-combined checked>
+                            <span class="toggle-ui" aria-hidden="true"></span>
+                            <span class="toggle-text">Both at once</span>
+                        </label>
                     </div>
 
                     <div class="piece-map" data-pieces aria-hidden="true"></div>
@@ -241,6 +256,32 @@
                             download doesn't restart.</p>
                     </article>
 
+                    <article class="tile tile-wide reveal">
+                        <div class="tile-art speed-bars" role="img" aria-label="In a local test: the service alone 0.70 MiB/s, peers alone 0.66 MiB/s, both at once 1.14 MiB/s.">
+                            <div><span>Your service alone</span><i class="sb-h" style="--w:61%"></i><em>0.70 MiB/s</em></div>
+                            <div><span>Peers alone</span><i class="sb-p" style="--w:58%"></i><em>0.66 MiB/s</em></div>
+                            <div><span>Both at once</span><i class="sb-both" style="--w:100%"></i><em>1.14 MiB/s</em></div>
+                        </div>
+                        <h3>Uses your whole connection.</h3>
+                        <p>When your connection is faster than your service delivers, Both at once lets peers use the
+                            rest of it, on different pieces, so nothing is fetched twice. In a local test, with each
+                            source held to 768 KiB/s, the two together were about 1.6 times as fast as either alone.
+                            It hasn't been measured with a real service or swarm yet, and if your service already
+                            fills your connection, it adds little.</p>
+                    </article>
+
+                    <article class="tile reveal">
+                        <div class="tile-art link-sample" aria-hidden="true">
+                            <span class="ls-name">sintel-2048-surround.mp4</span>
+                            <i><u></u></i>
+                            <span class="ls-host">dn720709.ca.archive.org · 1.3 MiB/s</span>
+                        </div>
+                        <h3>Plain links, too.</h3>
+                        <p>Paste a file link, such as a Stremio stream link through a debrid add-on or a link from
+                            your debrid website, and it downloads on its own Links page. It picks up again after a
+                            pause, a dropped connection or a restart.</p>
+                    </article>
+
                     <article class="tile reveal">
                         <div class="tile-art files" aria-hidden="true">
                             <div><span>Film</span><i class="fh"></i><em>Service</em></div>
@@ -256,11 +297,12 @@
                         <div class="tile-art source-sample" aria-hidden="true">
                             <span>Source</span>
                             <span><svg viewBox="0 0 16 16"><path d="M5 13V3M2 6l3-3 3 3M11 3v10m-3-3 3 3 3-3"/></svg>HTTPS · Real-Debrid</span>
+                            <span><svg viewBox="0 0 16 16"><path d="M5 13V3M2 6l3-3 3 3M11 3v10m-3-3 3 3 3-3"/></svg>Real-Debrid + peers</span>
                             <span><svg viewBox="0 0 16 16"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 14c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5M11 2.6a2.5 2.5 0 0 1 0 4.8M12.5 9.8c1.3.6 2 2 2 4.2"/></svg>BitTorrent · not cached on Real-Debrid</span>
                         </div>
                         <h3>Always says where data comes from.</h3>
-                        <p>A Source column shows where each download is coming from and, when it isn't your service,
-                            why.</p>
+                        <p>A Source column shows where each download is coming from, including both at once, and
+                            why when it isn't your service.</p>
                     </article>
 
                     <article class="tile reveal">
@@ -295,7 +337,7 @@
                     <h2 class="headline">qBittorrent, <span class="ember-text" data-accent-text>quieter.</span></h2>
                     <p class="section-lede">A single header replaces the menu bar and toolbar, and every function is
                         still there. Light and dark schemes follow the system, and the classic look is one switch
-                        away.</p>
+                        away. On first start, a short welcome tour shows what's new and connects Real-Debrid.</p>
                 </header>
 
                 <div class="accent-picker reveal" data-accent-picker>
@@ -328,6 +370,14 @@
                         </a>
                         <figcaption><strong>Options, restyled.</strong> Connect a provider under Hybrid sources.</figcaption>
                     </figure>
+                    <figure class="gallery-wide reveal">
+                        <a class="shot-link" href="assets/screenshots/links.png">
+                            <img class="shot" src="assets/screenshots/links.png" width="1800" height="1075" loading="lazy" data-accent-shot data-accent-keep="10 0 44 40, 14 44 54 44"
+                                 alt="The Links page with three direct downloads from public file servers: two completed, one downloading at 1.3 MiB/s. The Source column shows only each server's host. Opens the full-size image.">
+                        </a>
+                        <figcaption><strong>Links.</strong> Plain file links download on their own page, and only the
+                            server's name is ever shown, since the links themselves can carry keys.</figcaption>
+                    </figure>
                 </div>
             </div>
         </section>
@@ -341,7 +391,7 @@
                 </header>
 
                 <dl class="stats reveal">
-                    <div><dt>Test suites passing on Windows</dt><dd>32</dd></div>
+                    <div><dt>Test suites passing on Windows</dt><dd>34</dd></div>
                     <div><dt>Of them on the hybrid code, end to end</dt><dd>10</dd></div>
                     <div><dt>Real debrid accounts it has run against</dt><dd>1</dd></div>
                     <div><dt>Over HTTPS in that one live run</dt><dd>~10<small> MiB/s</small></dd></div>
@@ -350,12 +400,14 @@
                 <div class="specs reveal">
                     <div class="spec"><h3>Platforms</h3><p>Built and tested on Windows 11 only (MSVC, Qt 6.10.3, libtorrent 2.1.2). Linux and macOS have never been compiled.</p></div>
                     <div class="spec"><h3>Providers</h3><p>Real-Debrid only. Torrents that are v2-only can't use it.</p></div>
-                    <div class="spec"><h3>Not yet seen live</h3><p>Switching between the service and the swarm mid-download is covered by automated tests, but hasn't happened yet with a real account. Nor have several selected files in one torrent, a link expiring mid-transfer, OAuth token refresh, and adding a torrent to the account from the app.</p></div>
+                    <div class="spec"><h3>Not yet seen live</h3><p>Switching between the service and the swarm mid-download, and using both at once, are covered by automated tests but haven't happened yet with a real account. Nor have several selected files in one torrent, a link expiring mid-transfer, OAuth token refresh, and adding a torrent to the account from the app.</p></div>
+                    <div class="spec"><h3>Both at once</h3><p>Off by default. Measured only on one machine, with a local test server and one local seed: with each held to 768 KiB/s, the two together were about 1.6 times as fast as either alone. Not yet tried with the real service or a real swarm. A few of its parts (the priorities saved in resume data, hiding pieces again after you change file priorities, holding back "completed" while a hidden piece is missing) have no automated test.</p></div>
                     <div class="spec"><h3>Privacy</h3><p>"Debrid only makes no swarm connections" is enforced in code and tested at the API level, but not yet confirmed with a packet capture. Your provider still knows what you download.</p></div>
                     <div class="spec"><h3>Debrid only</h3><p>If the provider lacks part of a torrent, the download stops near the end and says so. It doesn't warn you at the start.</p></div>
                     <div class="spec"><h3>Speed</h3><p>Four parallel HTTPS requests per torrent by default. Whether that holds back fast connections hasn't been measured.</p></div>
                     <div class="spec"><h3>Statistics</h3><p>"Downloaded" and session totals count only bytes from peers. Progress, speed and ETA are correct.</p></div>
                     <div class="spec"><h3>Web UI and Web API</h3><p>No way to see or set the download source.</p></div>
+                    <div class="spec"><h3>Direct downloads</h3><p>Tested against a local test server and public file servers, not yet with a real Stremio add-on or debrid link. One connection per file, which may hold back fast connections, and at most three at once. Files are checked by size and ETag only, with no checksum. Not available from the Web UI, RSS or watched folders.</p></div>
                     <div class="spec"><h3>Translations</h3><p>New text is in English only.</p></div>
                     <div class="spec"><h3>Distribution</h3><p>A portable zip that updates itself. No installer and no code signing yet, so Windows SmartScreen warns on first start.</p></div>
                     <div class="spec"><h3>Updates</h3><p>The updater can't yet roll back a version that installs fine and then fails to start. An upstream release that merges cleanly and passes the tests ships without anyone looking, and the tests don't download from a real provider.</p></div>
@@ -382,7 +434,9 @@
                     <li><span>Measure and tune parallel HTTPS requests</span><code>Hybrid/MaxHttpPiecesPerTorrent</code></li>
                     <li><span>Another debrid provider, with contract tests</span><code>src/base/hybrid/provider.h</code></li>
                     <li><span>Linux and macOS builds, with their credential stores</span><code>src/base/hybrid/securestore.cpp</code></li>
-                    <li><span>Show and set the source in the Web UI and Web API</span><code>src/webui/</code></li>
+                    <li><span>Show the source and direct downloads in the Web UI and Web API</span><code>src/webui/</code></li>
+                    <li><span>Parallel connections for direct downloads</span><code>src/base/directdownload/</code></li>
+                    <li><span>Settings for direct downloads: how many at once, and the add dialog</span><code>src/gui/directdownload/</code></li>
                     <li><span>A packet-level check that "Debrid only" stays off the swarm</span><code>test/</code></li>
                     <li><span>An installer and code signing</span><code>.github/workflows/release.yaml</code></li>
                     <li><span>Roll back an update that fails to start</span><code>src/base/selfupdate/</code></li>

@@ -6,6 +6,22 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+// "Both at once" (the app's "Download from the debrid service and from peers at the same time"). Several
+// switches on the page show it; flipping one flips them all and tells the illustrations.
+const combined = {
+    on: true,
+    listeners: [],
+    set(on) {
+        this.on = on;
+        $$("[data-combined]").forEach((s) => { s.checked = on; });
+        this.listeners.forEach((f) => f(on));
+    },
+    listen(f) { this.listeners.push(f); },
+};
+document.addEventListener("change", (e) => {
+    if (e.target.matches("[data-combined]")) combined.set(e.target.checked);
+});
+
 /* ---------- Reveal on scroll ---------- */
 
 {
@@ -110,17 +126,32 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
         }
     };
 
+    // In "Debrid preferred", one source at a time: the service first, then peers for what it lacks.
+    // With "Both at once", peers work alongside the service from the start.
+    let phase = "";
+    const both = () => mode === "preferred" && combined.on;
+
     function setStates() {
         const httpsOn = mode !== "bittorrent";
         const peersOn = mode !== "debrid";
+        const finished = verified >= N;
+        const httpsBusy = httpsOn && !finished && phase !== "peers";
+        const peersBusy = peersOn && !finished && (mode !== "preferred" || both() || phase === "peers");
         httpsRow.classList.toggle("is-off", !httpsOn);
         peersRow.classList.toggle("is-off", !peersOn);
-        httpsRow.classList.toggle("is-active", httpsOn && verified < N);
-        peersRow.classList.toggle("is-active", peersOn && verified < N);
-        httpsState.textContent = !httpsOn ? "Not used" : verified >= N ? "Done" : "Sending";
+        httpsRow.classList.toggle("is-active", httpsBusy);
+        peersRow.classList.toggle("is-active", peersBusy);
+        httpsState.textContent = !httpsOn ? "Not used"
+            : finished ? "Done"
+            : httpsBusy ? (mode === "preferred" ? "Sending everything it has" : "Sending")
+            : "Done with what it has";
         peersState.textContent = !peersOn ? "Off · no swarm connections"
-            : mode === "preferred" ? "For the file your service lacks"
-            : verified >= N ? "Done" : `${PEER_SLOTS} peers`;
+            : finished ? "Done"
+            : mode !== "preferred" ? `${PEER_SLOTS} peers`
+            : both() ? "Alongside your service, on other pieces"
+            : phase === "peers" ? "Now fetching the file your service lacks"
+            : "Waiting for the file your service lacks";
+        sim.classList.toggle("is-both", both());
     }
 
     function render() {
@@ -162,6 +193,19 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
         }
     }
 
+    // Both at once: the service takes the first unclaimed pieces in order, a few at a time. A claimed
+    // piece is hidden from peers; a failed one is shown to everyone again.
+    async function httpsInOrder(gen, end) {
+        while (gen === generation) {
+            await whenVisible();
+            if (gen !== generation) return;
+            let i = 0;
+            while (i < end && state[i] !== 0) i++;
+            if (i >= end) return;
+            await fetchPiece(gen, i, "h");
+        }
+    }
+
     async function peerWorker(gen, allowed) {
         await sleep(rand(0, 600));
         while (gen === generation) {
@@ -180,24 +224,33 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
         cells.forEach((c, i) => {
             c.className = (mode === "preferred" && i >= PROVIDER_LACKS && state[i] === 0) ? "u" : "";
         });
+        phase = "";
         render();
         setStates();
 
-        const jobs = [];
-        if (mode !== "bittorrent") {
-            const end = mode === "preferred" ? PROVIDER_LACKS : N;
+        const end = mode === "preferred" ? PROVIDER_LACKS : N;
+        const every = Array.from({ length: N }, (_, i) => i);
+        const lacking = every.slice(PROVIDER_LACKS);
+        const peers = (allowed, slots) => Array.from({ length: slots }, () => peerWorker(gen, allowed));
+        const https = () => {
+            if (both()) return Array.from({ length: HTTPS_SLOTS }, () => httpsInOrder(gen, end));
             const chunk = Math.ceil(end / HTTPS_SLOTS);
-            for (let s = 0; s < HTTPS_SLOTS; s++)
-                jobs.push(httpsWorker(gen, s * chunk, Math.min(end, (s + 1) * chunk)));
-        }
-        if (mode !== "debrid") {
-            const allowed = [];
-            for (let i = mode === "preferred" ? PROVIDER_LACKS : 0; i < N; i++) allowed.push(i);
-            const slots = mode === "preferred" ? 4 : PEER_SLOTS;
-            for (let s = 0; s < slots; s++) jobs.push(peerWorker(gen, allowed));
-        }
+            return Array.from({ length: HTTPS_SLOTS }, (_, s) => httpsWorker(gen, s * chunk, Math.min(end, (s + 1) * chunk)));
+        };
 
-        await Promise.all(jobs);
+        if (mode === "debrid") {
+            await Promise.all(https());
+        } else if (mode === "bittorrent") {
+            await Promise.all(peers(every, PEER_SLOTS));
+        } else if (both()) {
+            await Promise.all([...https(), ...peers(every, 6)]);
+        } else {
+            await Promise.all(https());
+            if (gen !== generation) return;
+            phase = "peers";
+            setStates();
+            await Promise.all(peers(lacking, 6));
+        }
         if (gen !== generation) return;
         setStates();
         await sleep(3200);
@@ -223,6 +276,8 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
         placeThumb();
         mode = tab.dataset.mode;
         $$("[data-mode-copy]").forEach((a) => { a.hidden = a.dataset.modeCopy !== mode; });
+        // "Both at once" applies only to "Debrid preferred".
+        $("[data-sim-combined]").hidden = mode !== "preferred";
         run();
     }
 
@@ -243,6 +298,7 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
     new ResizeObserver(() => placeThumb(false)).observe(seg);
     new IntersectionObserver(([e]) => { visible = e.isIntersecting; wake(); }, { threshold: 0.15 }).observe(sim);
+    combined.listen(() => { if (mode === "preferred") run(); });
     document.addEventListener("visibilitychange", wake);
     placeThumb(false);
     run();
@@ -402,39 +458,143 @@ function runWhenVisible(target, frame) {
         const playBtn = $("[data-flow-play]", stage);
 
         const N = 40;
-        const T = { drop: 6, swarmOn: 7, back: 12, serviceOn: 13, done: 16.5, end: 21 };
-        const STEP_START = [0, T.drop, T.back, T.done];
-        const CAPTIONS = [
-            "It starts on your debrid service, at the full speed of your connection.",
-            "The service drops out. qBitFusion hands the download to the torrent swarm, if you've allowed that for this torrent. Every finished piece stays put.",
-            "Your service is back. The swarm finishes the pieces it was working on, and the service takes over the rest.",
-            "Done. Every piece was checked against the torrent's own fingerprint, wherever it came from.",
-        ];
+        const seeded = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        const inRuns = (time, runs) => runs.some(([a, b]) => time >= a && time < b);
 
-        // When each piece finishes, and from where. Fixed, so the story can be scrubbed.
-        const schedule = [];
-        {
-            const order = Array.from({ length: N }, (_, i) => i);
+        // One source at a time: the default. When each piece finishes, and from where, is fixed so the
+        // story can be scrubbed.
+        function serialStory() {
+            const T = { drop: 6, swarmOn: 7, back: 12, serviceOn: 13, done: 16.5, end: 21 };
+            const schedule = [];
             const first = 16;
             for (let i = 0; i < first; i++) schedule.push({ i, src: "h", at: 0.5 + (i * (T.drop - 0.7)) / first });
-            let seed = 7;
-            const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-            const rest = order.slice(first);
+            const rnd = seeded(7);
+            const rest = Array.from({ length: N - first }, (_, k) => first + k);
             const swarmPicks = [];
             while (swarmPicks.length < 8) {
                 const k = rest[Math.floor(rnd() * rest.length)];
                 if (!swarmPicks.includes(k)) swarmPicks.push(k);
             }
             swarmPicks.forEach((i, n) => schedule.push({ i, src: "p", at: T.swarmOn + 0.5 + n * ((T.back + 0.6 - T.swarmOn - 0.5) / swarmPicks.length) }));
-            const left = rest.filter((i) => !swarmPicks.includes(i));
-            left.forEach((i, n) => schedule.push({ i, src: "h", at: T.serviceOn + 0.3 + n * ((T.done - T.serviceOn - 0.5) / left.length) }));
+            rest.filter((i) => !swarmPicks.includes(i))
+                .forEach((i, n, left) => schedule.push({ i, src: "h", at: T.serviceOn + 0.3 + n * ((T.done - T.serviceOn - 0.5) / left.length) }));
+
+            return {
+                T, schedule,
+                steps: [0, T.drop, T.back, T.done],
+                labels: ["Starts on your service", "The service drops out", "It comes back", "Done, all checked"],
+                captions: [
+                    "It starts on your debrid service, at the full speed of your connection.",
+                    "The service drops out. qBitFusion hands the download to the torrent swarm, if you've allowed that for this torrent. Every finished piece stays put.",
+                    "Your service is back. The swarm finishes the pieces it was working on, and the service takes over the rest.",
+                    "Done. Every piece was checked against the torrent's own fingerprint, wherever it came from.",
+                ],
+                label: "Animated illustration: a download starts from the debrid service, switches to the torrent swarm when the service drops out, switches back when it returns, and finishes with every piece checked.",
+                serviceRuns: [[0, T.drop - 0.2], [T.serviceOn, T.done - 0.3]],
+                swarmRuns: [[T.swarmOn, T.serviceOn - 0.4]],
+                window: { h: 1, p: 1 },
+                rates: { h: 6, p: 2.6 },
+                reserve: () => [],
+                state(t) {
+                    return {
+                        service: t < T.drop ? "Sending" : t < T.back ? "Dropped out" : t < T.serviceOn ? "Back online" : t < T.done ? "Sending" : "Done",
+                        swarm: t < T.drop ? "Standing by" : t < T.swarmOn ? "Taking over" : t < T.back ? "Sending" : t < T.serviceOn ? "Finishing its pieces" : t < T.done ? "Standing by" : "Done",
+                        source: t < T.drop ? "Your debrid service" : t < T.swarmOn ? "Switching…" : t < T.serviceOn ? "Torrent swarm" : t < T.done ? "Your debrid service" : "Complete",
+                        speed: t < T.drop ? "6.1 MB/s" : t < T.swarmOn ? "" : t < T.serviceOn ? "3.7 MB/s" : t < T.done ? "6.1 MB/s" : "",
+                    };
+                },
+            };
         }
+
+        // Both at once. The service walks the pieces in order a few at a time, and only those are hidden
+        // from peers; peers take others. When the service drops out, peers simply carry on. Near the end,
+        // the faster source (here the service) finishes alone.
+        function combinedStory() {
+            const T = { drop: 5.5, back: 10, serviceOn: 10.6, tail: Infinity, done: 0, end: 0 };
+            const HTTP_WINDOW = 3;
+            const rate = { h: 2.0, p: 1.2 }; // pieces a second, in the same ratio as the speeds shown
+            const rnd = seeded(11);
+            const finished = new Array(N).fill(false);
+            const schedule = [];
+            const windowAt = () => {
+                const w = [];
+                for (let i = 0; i < N && w.length < HTTP_WINDOW; i++) if (!finished[i]) w.push(i);
+                return w;
+            };
+            let count = 0;
+            let accH = 0;
+            let accP = 0;
+            const step = 0.01;
+            for (let t = 0; count < N && t < 60; t += step) {
+                const serviceOn = (t >= 0.4 && t < T.drop) || t >= T.serviceOn;
+                if (T.tail === Infinity && t >= T.serviceOn && N - count <= 6) T.tail = t;
+                const peersOn = t >= 0.8 && t < T.tail;
+                if (serviceOn && (accH += rate.h * step) >= 1) {
+                    accH -= 1;
+                    const i = windowAt()[0];
+                    finished[i] = true;
+                    count++;
+                    schedule.push({ i, src: "h", at: t });
+                }
+                if (peersOn && count < N && (accP += rate.p * step) >= 1) {
+                    accP -= 1;
+                    const held = serviceOn ? windowAt() : [];
+                    const free = [];
+                    for (let i = 0; i < N; i++) if (!finished[i] && !held.includes(i)) free.push(i);
+                    if (free.length) {
+                        const i = free[Math.floor(rnd() * free.length)];
+                        finished[i] = true;
+                        count++;
+                        schedule.push({ i, src: "p", at: t });
+                    }
+                }
+                T.done = t + 0.2;
+            }
+            T.end = T.done + 4.5;
+
+            return {
+                T, schedule,
+                steps: [0, T.drop, T.back, T.done],
+                labels: ["Both at once", "The service drops out", "It comes back", "Done, all checked"],
+                captions: [
+                    "Your service and the swarm work at the same time, on different pieces. The service goes through the file in order, peers fill in around it, and neither fetches a piece the other is on.",
+                    "The service drops out. The swarm is already connected, so it simply carries on with the rest. Every finished piece stays put.",
+                    "Your service is back, and the two share the work again. For the last few pieces, whichever source is faster finishes alone.",
+                    "Done. Every piece was checked against the torrent's own fingerprint, wherever it came from.",
+                ],
+                label: "Animated illustration: the debrid service and the torrent swarm download different pieces at the same time. When the service drops out the swarm carries on, when it returns both work again, and the download finishes with every piece checked.",
+                serviceRuns: [[0.4, T.drop - 0.2], [T.serviceOn, T.done - 0.3]],
+                swarmRuns: [[0.8, T.tail - 0.3]],
+                window: { h: HTTP_WINDOW, p: 2 },
+                rates: { h: 6, p: 3.4 },
+                // The pieces the service holds at a moment: the first few unfinished ones, in order.
+                reserve: (t, done) => {
+                    const on = (t >= 0.4 && t < T.drop) || (t >= T.serviceOn && t < T.done);
+                    if (!on) return [];
+                    const w = [];
+                    for (let i = 0; i < N && w.length < HTTP_WINDOW; i++) if (!done[i]) w.push(i);
+                    return w;
+                },
+                state(t) {
+                    const both = (t < T.drop) || (t >= T.serviceOn && t < T.tail);
+                    return {
+                        service: t < T.drop ? "Sending" : t < T.back ? "Dropped out" : t < T.serviceOn ? "Back online" : t < T.tail ? "Sending" : t < T.done ? "Finishing the last pieces" : "Done",
+                        swarm: t < 0.8 ? "Connecting" : t < T.drop ? "Sending" : t < T.serviceOn ? "Carrying on alone" : t < T.tail ? "Sending" : t < T.done ? "Paused for the last pieces" : "Done",
+                        source: t >= T.done ? "Complete" : both ? "Your service + peers" : t < T.serviceOn ? "Torrent swarm" : "Your debrid service",
+                        speed: t >= T.done ? "" : both ? "9.8 MB/s" : t < T.serviceOn ? "3.7 MB/s" : "6.1 MB/s",
+                    };
+                },
+            };
+        }
+
+        const stories = { serial: serialStory(), combined: combinedStory() };
+        let story = combined.on ? stories.combined : stories.serial;
 
         let layout = null;
         let parts = null;
         let t = 0;
         let playing = !reduceMotion.matches;
-        if (!playing) t = T.done + 1;
+        if (!playing) t = story.T.done + 1;
 
         function build() {
             const wide = stage.clientWidth >= 700;
@@ -505,6 +665,7 @@ function runWhenVisible(target, frame) {
             P.pct = svg("text", { x: c.x + c.w - 22, y: c.y + 39, class: "svg-label strong", "text-anchor": "end" }, P.card);
             svg("text", { x: c.x + 22, y: c.y + 70, class: "svg-small" }, P.card, "Source");
             P.source = svg("text", { x: c.x + L.sourceDx, y: c.y + 70, class: "svg-small bright" }, P.card);
+            P.speed = svg("text", { x: c.x + c.w - 22, y: c.y + 70, class: "svg-small", "text-anchor": "end" }, P.card);
 
             const { cols, gap } = L;
             P.cells = [];
@@ -521,51 +682,60 @@ function runWhenVisible(target, frame) {
         }
 
         function stepAt(time) {
-            return time < T.drop ? 0 : time < T.back ? 1 : time < T.done ? 2 : 3;
+            const s = story.steps;
+            return time < s[1] ? 0 : time < s[2] ? 1 : time < s[3] ? 2 : 3;
         }
 
         let shownStep = -1;
         function draw() {
             build();
             const P = parts;
+            const { T } = story;
             const still = reduceMotion.matches && !playing;
 
             // Pieces.
-            let done = 0;
+            const done = new Array(N).fill(false);
+            let count = 0;
             let kept = 0;
-            for (const s of schedule) {
-                const cell = P.cells[s.i];
+            for (const s of story.schedule) {
                 const finished = s.at <= t;
-                cell.setAttribute("class", finished ? `fl-cell ${s.src === "h" ? "h" : "p"}` : "fl-cell");
-                if (finished) done++;
-                if (finished && s.at < T.drop) kept++;
+                P.cells[s.i].setAttribute("class", finished ? `fl-cell ${s.src}` : "fl-cell");
+                if (finished) {
+                    done[s.i] = true;
+                    count++;
+                    if (s.at < T.drop) kept++;
+                }
             }
-            // The next piece for the active source is shown as in flight.
-            const active = (t < T.drop || (t >= T.serviceOn && t < T.done)) ? "h" : (t >= T.swarmOn && t < T.serviceOn) ? "p" : null;
-            if (active) {
-                const next = schedule.filter((s) => s.src === active && s.at > t).sort((a, b) => a.at - b.at)[0];
-                if (next) P.cells[next.i].setAttribute("class", `fl-cell flight ${active}`);
-            }
-            P.pct.textContent = `${Math.round((done / N) * 100)}%`;
+            // Pieces in flight: the service's next few (hidden from peers when both run), and the peers' next.
+            const serviceSending = inRuns(t, story.serviceRuns);
+            const swarmSending = inRuns(t, story.swarmRuns);
+            const held = story.reserve(t, done);
+            const flying = (src, n) => story.schedule.filter((s) => s.src === src && s.at > t).sort((a, b) => a.at - b.at).slice(0, n);
+            if (serviceSending) (held.length ? held : flying("h", story.window.h).map((s) => s.i))
+                .forEach((i) => P.cells[i].setAttribute("class", "fl-cell flight h"));
+            if (swarmSending) flying("p", story.window.p).forEach((s) => P.cells[s.i].setAttribute("class", "fl-cell flight p"));
+            P.pct.textContent = `${Math.round((count / N) * 100)}%`;
 
             // Lines and packets.
-            const serviceOn = t < T.drop || (t >= T.serviceOn && t < T.done);
-            const swarmOn = t >= T.swarmOn && t < T.serviceOn;
             const broken = t >= T.drop && t < T.back;
-            P.lineService.setAttribute("class", `fl-line service${serviceOn ? " on" : ""}${broken ? " broken" : ""}`);
-            P.lineSwarm.setAttribute("class", `fl-line swarm${swarmOn ? " on" : ""}`);
+            P.lineService.setAttribute("class", `fl-line service${serviceSending ? " on" : ""}${broken ? " broken" : ""}`);
+            P.lineSwarm.setAttribute("class", `fl-line swarm${swarmSending ? " on" : ""}`);
             P.cut.setAttribute("class", `fl-cut${broken ? " on" : ""}`);
             P.service.setAttribute("class", `fl-node${broken ? " down" : ""}`);
             const q = still ? -1 : t;
-            const second = q >= T.serviceOn;
-            P.pktService(q, second ? T.serviceOn : 0, second ? T.done - 0.3 : T.drop - 0.2, 6, 0.7);
-            P.pktSwarm(q, T.swarmOn, T.serviceOn - 0.4, 2.6, 1.3);
+            const runAt = (runs) => runs.filter(([a]) => q >= a).pop() ?? runs[0];
+            const [sa, sb] = runAt(story.serviceRuns);
+            const [wa, wb] = runAt(story.swarmRuns);
+            P.pktService(q, sa, sb, story.rates.h, 0.7);
+            P.pktSwarm(q, wa, wb, story.rates.p, 1.3);
 
             // Status text.
-            P.serviceState.textContent = t < T.drop ? "Sending" : t < T.back ? "Dropped out" : t < T.serviceOn ? "Back online" : t < T.done ? "Sending" : "Done";
-            P.swarmState.textContent = t < T.drop ? "Standing by" : t < T.swarmOn ? "Taking over" : t < T.back ? "Sending" : t < T.serviceOn ? "Finishing its pieces" : t < T.done ? "Standing by" : "Done";
-            P.source.textContent = t < T.drop ? "Your debrid service" : t < T.swarmOn ? "Switching…" : t < T.serviceOn ? "Torrent swarm" : t < T.done ? "Your debrid service" : "Complete";
-            P.note.textContent = (t >= T.drop && t < T.back) ? `Kept all ${kept} finished pieces` : "";
+            const st = story.state(t);
+            P.serviceState.textContent = st.service;
+            P.swarmState.textContent = st.swarm;
+            P.source.textContent = st.source;
+            P.speed.textContent = st.speed;
+            P.note.textContent = broken ? `Kept all ${kept} finished pieces` : "";
             P.check.textContent = t >= T.done ? `All ${N} pieces checked ✓` : "";
             P.cardBox.setAttribute("class", `fl-card-box${t >= T.done ? " done" : ""}`);
 
@@ -573,12 +743,24 @@ function runWhenVisible(target, frame) {
             const step = stepAt(t);
             if (step !== shownStep) {
                 shownStep = step;
-                caption.textContent = CAPTIONS[step];
+                caption.textContent = story.captions[step];
                 stepButtons.forEach((b, i) => {
                     if (i === step) b.setAttribute("aria-current", "step");
                     else b.removeAttribute("aria-current");
                 });
             }
+        }
+
+        function useStory(next) {
+            story = next;
+            stepButtons.forEach((b, i) => {
+                const num = Object.assign(document.createElement("span"), { textContent: String(i + 1) });
+                b.replaceChildren(num, story.labels[i]);
+            });
+            art.setAttribute("aria-label", story.label);
+            t = playing ? 0 : story.T.done + 1;
+            shownStep = -1;
+            draw();
         }
 
         function setPlaying(on) {
@@ -592,24 +774,26 @@ function runWhenVisible(target, frame) {
         const kick = runWhenVisible(stage, (dt) => {
             if (playing) {
                 t += dt;
-                if (t >= T.end) t = 0;
+                if (t >= story.T.end) t = 0;
             }
             draw();
         });
 
         stepButtons.forEach((b, i) => b.addEventListener("click", () => {
             // With reduced motion, show the end of the step; otherwise play it from its start.
-            t = reduceMotion.matches ? [T.drop - 0.01, T.back - 0.01, T.done - 0.01, T.end - 0.01][i] : STEP_START[i];
+            const ends = [...story.steps.slice(1), story.T.end];
+            t = reduceMotion.matches ? ends[i] - 0.01 : story.steps[i];
             shownStep = -1;
             draw();
         }));
         playBtn.addEventListener("click", () => {
-            if (!playing && t >= T.end - 0.05) t = 0;
+            if (!playing && t >= story.T.end - 0.05) t = 0;
             setPlaying(!playing);
         });
+        combined.listen((on) => useStory(on ? stories.combined : stories.serial));
         new ResizeObserver(() => { const before = layout; build(); if (before !== layout) draw(); }).observe(stage);
         setPlaying(playing);
-        draw();
+        useStory(story);
     }
 }
 
