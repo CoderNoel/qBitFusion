@@ -33,13 +33,17 @@ ZIP_NAME = re.compile(r"^qBitFusion-[0-9.]+-windows-x64\.zip$")
 
 
 def fetch(url: str, *, api: bool = False) -> HTTPResponse:
+    if not url.startswith("https://"):
+        raise ValueError(f"Refusing to fetch a URL that is not HTTPS: {url}")
     headers = {"User-Agent": "qbitfusion-website-build"}
     if api:
         headers["Accept"] = "application/vnd.github+json"
         token = os.environ.get("GITHUB_TOKEN")
         if token:
             headers["Authorization"] = f"Bearer {token}"
-    response: HTTPResponse = urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60)
+    request = urllib.request.Request(url, headers=headers)
+    # Only HTTPS reaches this point (checked above), so bandit's warning about other URL schemes does not apply.
+    response: HTTPResponse = urllib.request.urlopen(request, timeout=60)  # nosec B310
     return response
 
 
