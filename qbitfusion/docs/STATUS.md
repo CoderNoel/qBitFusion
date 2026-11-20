@@ -70,7 +70,6 @@ self-updater, one for direct downloads). All pass.
   tests cover completion (the link is then deleted from the credential store and the saved list holds no
   link), unique names, pause and resume, resume after a restart from the credential store, the "link
   needed" state, retry after a dropped connection, and an expired link.
-
 - Unit suites: range parsing with a 20 000-case fuzz, URL guard, file binding, piece ownership (20 000
   random operations), provider health, the state machine (including a 50 000-event check that
   `debrid_only` never permits P2P, now also with the combined-mode events and with combined mode asked
